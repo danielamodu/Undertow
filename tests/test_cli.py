@@ -161,17 +161,49 @@ def test_resolve_command_runs_successfully(runner: CliRunner, monkeypatch: pytes
     assert "Footprint resolved" in output_of(result)
 
 
-def test_check_without_baseline_returns_warn(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_fails_closed_when_nothing_resolves(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty footprint is an error, never a verdict.
+
+    A source that returns nothing is indistinguishable from a model whose
+    upstream is genuinely clean. Only one of those is safe to ship, so Undertow
+    refuses to guess.
+    """
     mock_source = MagicMock()
+    mock_source.connection_error = None
     mock_source.get_entity.return_value = None
     mock_source.get_entities.return_value = {}
     mock_source.get_lineage.return_value = []
     mock_source.list_schema_fields.return_value = []
     monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
 
-    result = runner.invoke(main, ["check", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,nonexistent_model_xyz,PROD)"])
-    assert result.exit_code == 1
-    assert "No baseline found" in output_of(result)
+    result = runner.invoke(
+        main,
+        ["check", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,nonexistent_model_xyz,PROD)"],
+    )
+    assert result.exit_code == EXIT_ERROR
+    assert "Resolved nothing upstream" in output_of(result)
+
+
+def test_check_fails_closed_when_datahub_is_unreachable(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreachable GMS must not produce a green light."""
+    mock_source = MagicMock()
+    mock_source.connection_error = "ConnectionError: [Errno 111] Connection refused"
+    mock_source.get_entity.return_value = None
+    mock_source.get_entities.return_value = {}
+    mock_source.get_lineage.return_value = []
+    mock_source.list_schema_fields.return_value = []
+    monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
+
+    result = runner.invoke(
+        main,
+        ["check", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"],
+    )
+    assert result.exit_code == EXIT_ERROR
+    assert "Cannot reach DataHub" in output_of(result)
 
 
 
