@@ -1,4 +1,9 @@
 # Undertow
+
+[![CI](https://github.com/danielamodu/Undertow/actions/workflows/ci.yml/badge.svg)](https://github.com/danielamodu/Undertow/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
+
 > Stop deploying models on broken data.
 
 Undertow is a lineage-grounded pre-deploy gate for production ML models, built on DataHub. It traverses the metadata graph from an `mlModel` back through its feature pipelines and staging layers to the raw tables underneath, diffs what it finds against an approved baseline, and names the engineer who owns the change. If a breaking upstream change threatens a model, Undertow blocks the deploy in CI and writes native assertions, tags, and structured risk properties back into the catalog — so the next run, on any machine, starts from what the last one learned.
@@ -10,6 +15,20 @@ It is stateless by design. DataHub is the source of truth for topology and the s
 ## The Problem
 
 Production ML models silently degrade when upstream data contracts shift without notice. A column is dropped in a Snowflake staging table, an upstream engineer relaxes nullability, or a feature mean shifts by 3σ — yet the model continues serving predictions without error. Data engineers don't know which models depend on their schemas, and ML engineers don't discover the failure until model accuracy plunges in production.
+
+---
+
+## What DataHub already does, and what this adds
+
+**DataHub already does impact analysis.** Open any dataset in the UI and you can see what sits downstream of it, models included; DataHub Cloud markets this directly. Undertow does not claim to have invented downstream traversal, and it would be a worse project if it pretended the graph wasn't already there — the graph *is* the reason this works at all.
+
+Three things are added on top of it:
+
+1. **A diff against an approved baseline, not a view of the present.** Impact analysis answers "what is downstream of this?" Undertow answers "what changed since the last deploy this model was approved on, and does any of it reach the model?" That requires storing an approved state and comparing to it — which is why `undertow_baseline` is written back into the catalog.
+2. **A schema change and a drift signal, joined on the same lineage path.** A dropped column and a 3σ mean shift are both upstream facts about the same asset, and they are graded differently on purpose: schema changes are `CERTAIN` and may block, statistical drift is `PROBABLE` and may not, unless a team opts in.
+3. **A verdict with an exit code, in CI, before the deploy.** A dashboard is something you visit after you have been paged. Undertow is a gate that stops the deploy and names the engineer whose change caused it — then writes the result back so the catalog is better off for the run.
+
+If you only need "what's downstream of this table", use DataHub's impact analysis. Undertow is for the case where you want that answer to *stop a deploy*.
 
 ---
 
@@ -35,12 +54,25 @@ transactions.raw                                   (@data_eng_tom)
 
 ---
 
+## Evaluating this without Docker
+
+Standing up DataHub takes ~10 minutes and several GB. If you would rather not:
+
+- **[`examples/`](examples/)** holds real captured output — a CLEAR verdict, a BLOCK with the full attribution path, the two-model blast radius, the PR comment, and the aspects written to DataHub **read back out of GMS** to prove they landed. Nothing there is hand-written.
+- The test suite runs with no DataHub and no API key:
+
+```bash
+pip install -e ".[dev]" && pytest -q
+```
+
+---
+
 ## Quick Start
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.11+ — the floor is set by `mcp-server-datahub`, which the `--mcp` path needs
 - Docker Desktop
-- DataHub running locally
+- DataHub OSS (verified against v1.7.0)
 
 ### Setup
 ```bash
@@ -51,6 +83,11 @@ datahub docker quickstart
 make seed
 make baseline
 ```
+
+`.[dev]` installs everything every documented command needs, including the MCP client
+and server for `--mcp` and the Anthropic SDK for `--investigate`. If you want a leaner
+install, the extras are `.[mcp]` and `.[llm]`; the core package resolves lineage through
+the Python SDK and needs neither.
 
 ---
 
@@ -73,36 +110,42 @@ Verbatim from a live run against DataHub v1.7.0:
 ```
 🔴 BLOCK — fraud_detector_v3 (1 blocking, 0 warning)
 
-┌───────────────────────────────── BLOCKING ──────────────────────────────────┐
-│ Feature `transaction_velocity_7d` — Column `transaction_amount` was dropped │
-│ from transactions.raw                                                       │
-│                                                                             │
-│ transactions.raw.transaction_amount (@data_eng_tom)                         │
-│ └── staging.transactions_clean [DownstreamOf]                               │
-│     └── transaction_velocity_7d [DerivedFrom]                               │
-│         └── fraud_detector_v3 [Consumes]                                    │
-│                                                                             │
-│   Confidence: CERTAIN (column dropped)                                      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────── BLOCKING ───────────────────────────────────────┐
+│ Feature `transaction_velocity_7d` — Column `transaction_amount` was dropped from      │
+│ transactions.raw                                                                      │
+│                                                                                       │
+│ transactions.raw.transaction_amount (@data_eng_tom)                                   │
+│ └── staging.transactions_clean [DownstreamOf]                                         │
+│     └── transaction_velocity_7d [DerivedFrom]                                         │
+│         └── fraud_detector_v3 [Consumes]                                              │
+│                                                                                       │
+│   Confidence: CERTAIN (column dropped)                                                │
+│                                                                                       │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+
+exit: 1
 
 🔴 BLOCK — churn_predictor_v1 (1 blocking, 0 warning)
 
-┌───────────────────────────────── BLOCKING ──────────────────────────────────┐
-│ Feature `customer_txn_volume` — Column `transaction_amount` was dropped     │
-│ from transactions.raw                                                       │
-│                                                                             │
-│ transactions.raw.transaction_amount (@data_eng_tom)                         │
-│ └── staging.transactions_clean [DownstreamOf]                               │
-│     └── customer_txn_volume [DerivedFrom]                                   │
-│         └── churn_predictor_v1 [Consumes]                                   │
-│                                                                             │
-│   Confidence: CERTAIN (column dropped)                                      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────── BLOCKING ───────────────────────────────────────┐
+│ Feature `customer_txn_volume` — Column `transaction_amount` was dropped from          │
+│ transactions.raw                                                                      │
+│                                                                                       │
+│ transactions.raw.transaction_amount (@data_eng_tom)                                   │
+│ └── staging.transactions_clean [DownstreamOf]                                         │
+│     └── customer_txn_volume [DerivedFrom]                                             │
+│         └── churn_predictor_v1 [Consumes]                                             │
+│                                                                                       │
+│   Confidence: CERTAIN (column dropped)                                                │
+│                                                                                       │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+
+exit: 1
 ```
 
 The fraud team's change broke the churn team's model. Neither team knew the other was downstream of the same table; the graph did.
+
+Both runs exit `1`. Captured verbatim in [`examples/verdict-blast-radius.txt`](examples/verdict-blast-radius.txt).
 
 Add `--write-back` to record the verdict in DataHub:
 
@@ -149,9 +192,40 @@ Undertow is a CI gate, so its exit status is part of its contract:
 
 ## Architecture
 
-Undertow is structured into 6 decoupled pipeline layers:
+Six decoupled layers. The LLM sits off to the side of the decision, never in it:
 
-$$\text{Resolver} \longrightarrow \text{Differ} \longrightarrow \text{Attributor} \longrightarrow \text{Policy Engine} \longrightarrow \text{Narrator} \longrightarrow \text{Reporter}$$
+```
+  model URN
+      │
+      ▼
+┌───────────┐   ┌──────────┐   ┌────────────┐   ┌───────────────┐
+│ RESOLVER  │──▶│  DIFFER  │──▶│ ATTRIBUTOR │──▶│ POLICY ENGINE │
+│ walk the  │   │ schema ∙ │   │ root cause │   │   verdict     │
+│   graph   │   │  stats   │   │  + owners  │   │  + exit code  │
+└─────┬─────┘   └──────────┘   └────────────┘   └───────┬───────┘
+      │                                                 │
+      │ MCP / SDK                    ┌──────────────────┴────────┐
+      │                              ▼                           ▼
+      │                     ┌─────────────────┐        ┌──────────────────┐
+      │                     │  INVESTIGATOR   │        │    NARRATOR      │
+      │                     │  agent loop —   │        │ prose, or a      │
+      │                     │  adds context,  │        │ template. Never  │
+      │                     │  never severity │        │ decides anything │
+      │                     └────────┬────────┘        └────────┬─────────┘
+      │                              └─────────────┬────────────┘
+      │                                            ▼
+      │                                    ┌───────────────┐
+      │                                    │   REPORTER    │
+      │                                    │ console ∙ PR  │
+      │                                    │ ∙ write-back  │
+      │                                    └───────┬───────┘
+      ▼                                            │
+┌──────────────────────────────────────────────────▼──────────┐
+│                          DATAHUB                            │
+│  reads: MCP server (get_entities, get_lineage, schema)      │
+│  writes: REST emitter (assertions, tags, structured props)  │
+└─────────────────────────────────────────────────────────────┘
+```
 
 1. **Resolver**: Traverses the graph via DataHub's MCP server (or a fallback Python SDK client) to construct `DependencyFootprint` snapshots.
 2. **Differ**: Evaluates set differences across schema, governance, and statistical profiles.
@@ -190,7 +264,10 @@ Undertow holds no database of its own. DataHub is the source of truth for topolo
 
 ## OSS Contribution
 
-**`MLModelPatchBuilder` for `datahub/specific/`** — proposed in [`contrib/datahub-mlmodel-patch-builder/`](contrib/datahub-mlmodel-patch-builder/mlmodel.py).
+**`MLModelPatchBuilder` for `datahub/specific/`**
+
+- Upstream issue: [datahub-project/datahub#18971](https://github.com/datahub-project/datahub/issues/18971)
+- Proposed implementation: [`contrib/datahub-mlmodel-patch-builder/`](contrib/datahub-mlmodel-patch-builder/)
 
 DataHub's `entity_client.update()` branches on its argument: an `Entity` becomes a full-aspect `UPSERT`, a `MetadataPatchProposal` becomes a surgical `PATCH`. `datahub/specific/` ships patch builders for chart, dashboard, dataJob, dataProduct, dataset, form, and structuredProperty — but none for an ML entity, so `mlModel` aspects are `UPSERT`-only unless you hand-roll one.
 
@@ -203,7 +280,13 @@ That matters because `UPSERT` is lossy. Verified against a live GMS:
 
 Undertow writes `undertow_risk_verdict`, `undertow_last_checked`, and `undertow_baseline` as separate concerns, so this is a live problem rather than a theoretical one.
 
-The proposed builder composes DataHub's existing entity-agnostic mixins (`HasOwnershipPatch`, `HasTagsPatch`, `HasStructuredPropertiesPatch`, …) exactly as `DataProductPatchBuilder` does — no new machinery, just the missing composition, and 19 mutation methods rather than the 2 our vendored version exposes.
+The evidence is in [`examples/datahub-writeback.json`](examples/datahub-writeback.json): a `probe_alpha` property written by something else is still on the model after Undertow wrote three properties of its own. An `UPSERT` would have removed it.
+
+The proposed builder composes DataHub's existing entity-agnostic mixins (`HasOwnershipPatch`, `HasTagsPatch`, `HasStructuredPropertiesPatch`, …) exactly as `DataProductPatchBuilder` does — no new machinery, just the missing composition, and 19 mutation methods rather than the 2 our vendored version exposes. It ships with a six-test suite that runs without DataHub:
+
+```bash
+pytest contrib/datahub-mlmodel-patch-builder/ -q
+```
 
 *Note: `datahub.sdk.MLModel` already supports mlModel structured properties via the newer SDK layer. The gap is specifically the absence of a `PATCH`-emitting builder, not the absence of mlModel support.*
 
