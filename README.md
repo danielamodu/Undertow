@@ -6,7 +6,15 @@
 
 > Stop deploying models on broken data.
 
-Undertow is a lineage-grounded pre-deploy gate for production ML models, built on DataHub. It traverses the metadata graph from an `mlModel` back through its feature pipelines and staging layers to the raw tables underneath, diffs what it finds against an approved baseline, and names the engineer who owns the change. If a breaking upstream change threatens a model, Undertow blocks the deploy in CI and writes native assertions, tags, and structured risk properties back into the catalog — so the next run, on any machine, starts from what the last one learned.
+Undertow is an agent that stands between a production ML model and a bad deploy.
+
+It walks DataHub's graph from an `mlModel` back through its features and staging layers to the raw tables underneath, investigates what changed since the last approved deploy, and names the engineer whose change caused it. When something breaks, it blocks the deploy in CI and writes native assertions, tags, and structured risk properties back into the catalog — so the next run, on any machine, starts from what the last one learned.
+
+<img src="docs/verdict-block.svg" alt="Undertow blocking a deploy: a dropped column in transactions.raw traced through staging and a feature to fraud_detector_v3, with the owning engineer named" width="100%">
+
+**The agent gathers the context. The rules decide.** An investigation loop reads each finding, picks a DataHub tool, and goes looking — what SQL actually reads this column, was the change documented, which other models sit on this path. What it learns is attached to the report. What it cannot do is change the verdict, and that is enforced by the type system rather than by a prompt: the loop consumes and produces `Finding`, and a `Finding` has no severity field. There is a test asserting the verdict is byte-identical with and without the agent running.
+
+That split is the whole design. An agent free to argue its way to a green light is not a gate; a gate with no agent leaves an engineer holding a diff and no context. This is both.
 
 It is stateless by design. DataHub is the source of truth for topology and the store for verdict history; the only local artifact is a baseline snapshot, and that is mirrored into DataHub too.
 
@@ -169,7 +177,9 @@ make reset
 |---|---|
 | `make seed` | Build the fixture graph: source tables, SQL-parsed staging layer, features, two models, model group, deployment |
 | `make baseline` | Capture the approved state of both models |
-| `make break` | Drop `transaction_amount` from `transactions.raw` |
+| `make break` | Drop `transaction_amount` from `transactions.raw` — a `CERTAIN` change |
+| `make break-stats` | Shift the distribution of `amount` by 4.8σ — a `PROBABLE` change |
+| `make check-warn` | Gate after drift: WARN, exit `0`. Statistics do not stop a deploy |
 | `make check` | Gate the fraud model |
 | `make blast-radius` | Gate every model downstream of the change |
 | `make check-write` | Gate and write the verdict back to DataHub |
@@ -241,9 +251,40 @@ Six decoupled layers. The LLM sits off to the side of the decision, never in it:
 - **The agent cannot change the verdict.** When `--investigate` is on, the investigation loop runs *after* the policy engine has decided, and it can only add explanation. This is enforced structurally rather than by instruction, and there is a test that asserts the verdict is byte-identical with and without the agent.
 - **Fails closed.** A resolver that cannot reach DataHub records the failure instead of returning an empty footprint. An empty footprint would otherwise diff clean against any baseline and surface as a confident CLEAR produced by a broken connection.
 - **Statistics limited to what DataHub profiles by default**: null-rate jumps, cardinality shifts, z-score mean shifts, range violations, and row-count changes — all from fields that are `default=True` on a stock instance. An earlier revision computed PSI from quantiles and histograms; it was removed because DataHub gates quantiles behind three separate `default=False` flags *and* a cardinality check, so it worked on our fixture and returned nothing on anyone else's DataHub.
-- **A missing statistic means "cannot assess", never "no drift."** `profile_coverage` exists so a CLEAR verdict can state honestly how much of the footprint it was able to inspect.
+- **A missing statistic means "cannot assess", never "no drift."** Every report ends with what the statistical differ could actually see:
+
+  ```
+  statistics: Compared statistics on 3/14 columns across 3/6 assets.
+  ```
+
+  "No drift found" across assets that were never profiled is a far weaker claim than the same words across assets that were, and a report that renders them identically is quietly misleading. Where nothing was profiled at all, the line turns yellow and says so.
+
+  Profiles are read from DataHub's *timeseries* API rather than the entity snapshot, because that is the only place they exist — `datasetProfile` never appears in `get_entity_semityped`. Missing that is what left the statistical differ fully implemented, fully unit-tested, and connected to nothing.
 - **CERTAIN vs. PROBABLE**: Schema and governance changes are `CERTAIN`. Statistical drift is `PROBABLE`, and the policy engine refuses to let a PROBABLE finding BLOCK unless a team explicitly opts in — a distribution moving is evidence something *may* be wrong, and blocking on evidence that weak is how a gate loses its welcome.
 - **Native Write-Back**: Standard DataHub metadata change proposals. No custom datastore.
+
+---
+
+## DataHub Skill
+
+[`skills/undertow-deploy-gate/`](skills/undertow-deploy-gate/) is a DataHub Skill, written to the [datahub-skills](https://github.com/datahub-project/datahub-skills) format so it installs and dispatches like the ones DataHub ships.
+
+The MCP server gives an agent tools. A skill gives it judgement about when to use them. This one encodes the workflow around the gate — resolve the model, confirm a baseline exists, run the check, read the *exit code* rather than the prose, and on a block, name the column, the path, and the owner before checking who else is downstream.
+
+The part worth reading is what it forbids:
+
+> **You do not decide whether the deploy proceeds. Undertow does.**
+>
+> If you find yourself looking for a flag that makes the red box go away, stop and tell the user what the finding actually is.
+
+It will not edit `undertow.yaml` to downgrade a BLOCK, re-baseline to make a finding disappear without confirmation, or report exit code `2` — the gate could not see the graph — as a pass. The same constraint the investigation loop has in code, written down for the agent that drives the CLI.
+
+```
+/undertow-deploy-gate is fraud_detector_v3 safe to deploy?
+/undertow-deploy-gate what breaks if I drop transaction_amount from transactions.raw?
+```
+
+Ships with [`references/verdicts.md`](skills/undertow-deploy-gate/references/verdicts.md) (every finding kind, its confidence, its severity) and [`templates/owner-notification.md`](skills/undertow-deploy-gate/templates/owner-notification.md). Both are tested: [`tests/test_skill.py`](tests/test_skill.py) asserts every CLI subcommand and flag the skill names actually exists, and that the finding-kind reference matches the enum the policy engine rules on. A skill is documentation an agent *executes*, so a stale command in one gets run rather than merely misread.
 
 ---
 

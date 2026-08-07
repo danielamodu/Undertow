@@ -1,0 +1,105 @@
+<svg class="rich-terminal" viewBox="0 0 1092 440.4" xmlns="http://www.w3.org/2000/svg">
+    <!-- Generated with Rich https://www.textualize.io -->
+    <style>
+
+    .terminal-3111780091-matrix {
+        font-family: monospace;
+        font-size: 20px;
+        line-height: 24.4px;
+        font-variant-east-asian: full-width;
+    }
+
+    .terminal-3111780091-title {
+        font-size: 18px;
+        font-weight: bold;
+        font-family: arial;
+    }
+
+    .terminal-3111780091-r1 { fill: #f4005f;font-weight: bold }
+.terminal-3111780091-r2 { fill: #d9d9d9 }
+.terminal-3111780091-r3 { fill: #f4005f }
+.terminal-3111780091-r4 { fill: #878787 }
+.terminal-3111780091-r5 { fill: #398291;font-weight: bold }
+    </style>
+
+    <defs>
+    <clipPath id="terminal-3111780091-clip-terminal">
+      <rect x="0" y="0" width="1072.6" height="389.4" />
+    </clipPath>
+    <clipPath id="terminal-3111780091-line-0">
+    <rect x="0" y="1.5" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-1">
+    <rect x="0" y="25.9" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-2">
+    <rect x="0" y="50.3" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-3">
+    <rect x="0" y="74.7" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-4">
+    <rect x="0" y="99.1" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-5">
+    <rect x="0" y="123.5" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-6">
+    <rect x="0" y="147.9" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-7">
+    <rect x="0" y="172.3" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-8">
+    <rect x="0" y="196.7" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-9">
+    <rect x="0" y="221.1" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-10">
+    <rect x="0" y="245.5" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-11">
+    <rect x="0" y="269.9" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-12">
+    <rect x="0" y="294.3" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-13">
+    <rect x="0" y="318.7" width="1073.6" height="24.65"/>
+            </clipPath>
+<clipPath id="terminal-3111780091-line-14">
+    <rect x="0" y="343.1" width="1073.6" height="24.65"/>
+            </clipPath>
+    </defs>
+
+    <rect fill="#0c0c0c" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1090" height="438.4" rx="8"/><text class="terminal-3111780091-title" fill="#d9d9d9" text-anchor="middle" x="545" y="27">undertow&#160;check&#160;&#160;·&#160;&#160;exit&#160;1</text>
+            <g transform="translate(26,22)">
+            <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
+            <circle cx="22" cy="0" r="7" fill="#febc2e"/>
+            <circle cx="44" cy="0" r="7" fill="#28c840"/>
+            </g>
+        
+    <g transform="translate(9, 41)" clip-path="url(#terminal-3111780091-clip-terminal)">
+    
+    <g class="terminal-3111780091-matrix">
+    <text class="terminal-3111780091-r1" x="0" y="20" textLength="622.2" clip-path="url(#terminal-3111780091-line-0)">🔴&#160;BLOCK&#160;—&#160;fraud_detector_v3&#160;(1&#160;blocking,&#160;0&#160;warning)</text><text class="terminal-3111780091-r2" x="1073.6" y="20" textLength="12.2" clip-path="url(#terminal-3111780091-line-0)">
+</text><text class="terminal-3111780091-r2" x="1073.6" y="44.4" textLength="12.2" clip-path="url(#terminal-3111780091-line-1)">
+</text><text class="terminal-3111780091-r3" x="0" y="68.8" textLength="24.4" clip-path="url(#terminal-3111780091-line-2)">┌─</text><text class="terminal-3111780091-r3" x="24.4" y="68.8" textLength="451.4" clip-path="url(#terminal-3111780091-line-2)">─────────────────────────────────────</text><text class="terminal-3111780091-r1" x="488" y="68.8" textLength="97.6" clip-path="url(#terminal-3111780091-line-2)">BLOCKING</text><text class="terminal-3111780091-r3" x="597.8" y="68.8" textLength="451.4" clip-path="url(#terminal-3111780091-line-2)">─────────────────────────────────────</text><text class="terminal-3111780091-r3" x="1049.2" y="68.8" textLength="24.4" clip-path="url(#terminal-3111780091-line-2)">─┐</text><text class="terminal-3111780091-r2" x="1073.6" y="68.8" textLength="12.2" clip-path="url(#terminal-3111780091-line-2)">
+</text><text class="terminal-3111780091-r3" x="0" y="93.2" textLength="12.2" clip-path="url(#terminal-3111780091-line-3)">│</text><text class="terminal-3111780091-r1" x="24.4" y="93.2" textLength="988.2" clip-path="url(#terminal-3111780091-line-3)">Feature&#160;`transaction_velocity_7d`&#160;—&#160;Column&#160;`transaction_amount`&#160;was&#160;dropped&#160;from&#160;</text><text class="terminal-3111780091-r3" x="1061.4" y="93.2" textLength="12.2" clip-path="url(#terminal-3111780091-line-3)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="93.2" textLength="12.2" clip-path="url(#terminal-3111780091-line-3)">
+</text><text class="terminal-3111780091-r3" x="0" y="117.6" textLength="12.2" clip-path="url(#terminal-3111780091-line-4)">│</text><text class="terminal-3111780091-r1" x="24.4" y="117.6" textLength="195.2" clip-path="url(#terminal-3111780091-line-4)">transactions.raw</text><text class="terminal-3111780091-r3" x="1061.4" y="117.6" textLength="12.2" clip-path="url(#terminal-3111780091-line-4)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="117.6" textLength="12.2" clip-path="url(#terminal-3111780091-line-4)">
+</text><text class="terminal-3111780091-r3" x="0" y="142" textLength="12.2" clip-path="url(#terminal-3111780091-line-5)">│</text><text class="terminal-3111780091-r3" x="1061.4" y="142" textLength="12.2" clip-path="url(#terminal-3111780091-line-5)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="142" textLength="12.2" clip-path="url(#terminal-3111780091-line-5)">
+</text><text class="terminal-3111780091-r3" x="0" y="166.4" textLength="12.2" clip-path="url(#terminal-3111780091-line-6)">│</text><text class="terminal-3111780091-r2" x="24.4" y="166.4" textLength="622.2" clip-path="url(#terminal-3111780091-line-6)">transactions.raw.transaction_amount&#160;(@data_eng_tom)</text><text class="terminal-3111780091-r3" x="1061.4" y="166.4" textLength="12.2" clip-path="url(#terminal-3111780091-line-6)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="166.4" textLength="12.2" clip-path="url(#terminal-3111780091-line-6)">
+</text><text class="terminal-3111780091-r3" x="0" y="190.8" textLength="12.2" clip-path="url(#terminal-3111780091-line-7)">│</text><text class="terminal-3111780091-r2" x="24.4" y="190.8" textLength="549" clip-path="url(#terminal-3111780091-line-7)">└──&#160;staging.transactions_clean&#160;[DownstreamOf]</text><text class="terminal-3111780091-r3" x="1061.4" y="190.8" textLength="12.2" clip-path="url(#terminal-3111780091-line-7)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="190.8" textLength="12.2" clip-path="url(#terminal-3111780091-line-7)">
+</text><text class="terminal-3111780091-r3" x="0" y="215.2" textLength="12.2" clip-path="url(#terminal-3111780091-line-8)">│</text><text class="terminal-3111780091-r2" x="24.4" y="215.2" textLength="549" clip-path="url(#terminal-3111780091-line-8)">&#160;&#160;&#160;&#160;└──&#160;transaction_velocity_7d&#160;[DerivedFrom]</text><text class="terminal-3111780091-r3" x="1061.4" y="215.2" textLength="12.2" clip-path="url(#terminal-3111780091-line-8)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="215.2" textLength="12.2" clip-path="url(#terminal-3111780091-line-8)">
+</text><text class="terminal-3111780091-r3" x="0" y="239.6" textLength="12.2" clip-path="url(#terminal-3111780091-line-9)">│</text><text class="terminal-3111780091-r2" x="24.4" y="239.6" textLength="488" clip-path="url(#terminal-3111780091-line-9)">&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;└──&#160;fraud_detector_v3&#160;[Consumes]</text><text class="terminal-3111780091-r3" x="1061.4" y="239.6" textLength="12.2" clip-path="url(#terminal-3111780091-line-9)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="239.6" textLength="12.2" clip-path="url(#terminal-3111780091-line-9)">
+</text><text class="terminal-3111780091-r3" x="0" y="264" textLength="12.2" clip-path="url(#terminal-3111780091-line-10)">│</text><text class="terminal-3111780091-r3" x="1061.4" y="264" textLength="12.2" clip-path="url(#terminal-3111780091-line-10)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="264" textLength="12.2" clip-path="url(#terminal-3111780091-line-10)">
+</text><text class="terminal-3111780091-r3" x="0" y="288.4" textLength="12.2" clip-path="url(#terminal-3111780091-line-11)">│</text><text class="terminal-3111780091-r4" x="24.4" y="288.4" textLength="463.6" clip-path="url(#terminal-3111780091-line-11)">&#160;&#160;Confidence:&#160;CERTAIN&#160;(column&#160;dropped)</text><text class="terminal-3111780091-r3" x="1061.4" y="288.4" textLength="12.2" clip-path="url(#terminal-3111780091-line-11)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="288.4" textLength="12.2" clip-path="url(#terminal-3111780091-line-11)">
+</text><text class="terminal-3111780091-r3" x="0" y="312.8" textLength="12.2" clip-path="url(#terminal-3111780091-line-12)">│</text><text class="terminal-3111780091-r3" x="1061.4" y="312.8" textLength="12.2" clip-path="url(#terminal-3111780091-line-12)">│</text><text class="terminal-3111780091-r2" x="1073.6" y="312.8" textLength="12.2" clip-path="url(#terminal-3111780091-line-12)">
+</text><text class="terminal-3111780091-r3" x="0" y="337.2" textLength="1073.6" clip-path="url(#terminal-3111780091-line-13)">└──────────────────────────────────────────────────────────────────────────────────────┘</text><text class="terminal-3111780091-r2" x="1073.6" y="337.2" textLength="12.2" clip-path="url(#terminal-3111780091-line-13)">
+</text><text class="terminal-3111780091-r2" x="1073.6" y="361.6" textLength="12.2" clip-path="url(#terminal-3111780091-line-14)">
+</text><text class="terminal-3111780091-r4" x="0" y="386" textLength="451.4" clip-path="url(#terminal-3111780091-line-15)">&#160;&#160;statistics:&#160;Compared&#160;statistics&#160;on&#160;</text><text class="terminal-3111780091-r5" x="451.4" y="386" textLength="12.2" clip-path="url(#terminal-3111780091-line-15)">2</text><text class="terminal-3111780091-r4" x="463.6" y="386" textLength="12.2" clip-path="url(#terminal-3111780091-line-15)">/</text><text class="terminal-3111780091-r5" x="475.8" y="386" textLength="24.4" clip-path="url(#terminal-3111780091-line-15)">13</text><text class="terminal-3111780091-r4" x="500.2" y="386" textLength="195.2" clip-path="url(#terminal-3111780091-line-15)">&#160;columns&#160;across&#160;</text><text class="terminal-3111780091-r5" x="695.4" y="386" textLength="12.2" clip-path="url(#terminal-3111780091-line-15)">3</text><text class="terminal-3111780091-r4" x="707.6" y="386" textLength="12.2" clip-path="url(#terminal-3111780091-line-15)">/</text><text class="terminal-3111780091-r5" x="719.8" y="386" textLength="12.2" clip-path="url(#terminal-3111780091-line-15)">6</text><text class="terminal-3111780091-r4" x="732" y="386" textLength="97.6" clip-path="url(#terminal-3111780091-line-15)">&#160;assets.</text><text class="terminal-3111780091-r2" x="1073.6" y="386" textLength="12.2" clip-path="url(#terminal-3111780091-line-15)">
+</text>
+    </g>
+    </g>
+</svg>
