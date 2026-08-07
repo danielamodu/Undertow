@@ -266,8 +266,9 @@ Undertow holds no database of its own. DataHub is the source of truth for topolo
 
 **`MLModelPatchBuilder` for `datahub/specific/`**
 
-- Upstream issue: [datahub-project/datahub#18971](https://github.com/datahub-project/datahub/issues/18971)
-- Proposed implementation: [`contrib/datahub-mlmodel-patch-builder/`](contrib/datahub-mlmodel-patch-builder/)
+- **Upstream PR: [datahub-project/datahub#18979](https://github.com/datahub-project/datahub/pull/18979)** — builder + 12 tests, against `master`
+- Issue it closes: [datahub-project/datahub#18971](https://github.com/datahub-project/datahub/issues/18971)
+- The same code, vendored here so Undertow runs today: [`contrib/datahub-mlmodel-patch-builder/`](contrib/datahub-mlmodel-patch-builder/)
 
 DataHub's `entity_client.update()` branches on its argument: an `Entity` becomes a full-aspect `UPSERT`, a `MetadataPatchProposal` becomes a surgical `PATCH`. `datahub/specific/` ships patch builders for chart, dashboard, dataJob, dataProduct, dataset, form, and structuredProperty — but none for an ML entity, so `mlModel` aspects are `UPSERT`-only unless you hand-roll one.
 

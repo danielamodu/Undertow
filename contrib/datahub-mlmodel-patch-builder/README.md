@@ -1,11 +1,18 @@
 # `MLModelPatchBuilder` — proposed addition to DataHub
 
-Upstream issue: **[datahub-project/datahub#18971](https://github.com/datahub-project/datahub/issues/18971)**
+**Submitted upstream: [datahub-project/datahub#18979](https://github.com/datahub-project/datahub/pull/18979)**, closing
+[#18971](https://github.com/datahub-project/datahub/issues/18971).
+
+This directory is the vendored copy, so Undertow works against today's released
+SDK rather than waiting on the PR to merge.
 
 | File | Destination upstream |
 |---|---|
 | [`mlmodel.py`](mlmodel.py) | `metadata-ingestion/src/datahub/specific/mlmodel.py` |
 | [`test_mlmodel_patch_builder.py`](test_mlmodel_patch_builder.py) | `metadata-ingestion/tests/unit/patch/test_mlmodel_patch_builder.py` |
+
+The upstream version carries the full `mlModelProperties` setter surface and 12
+tests; the copy here is the minimal subset Undertow actually calls.
 
 ## The gap
 
