@@ -21,6 +21,9 @@ from click.testing import CliRunner
 from undertow.cli import EXIT_ERROR, EXIT_OK, main
 from undertow.models import FindingKind
 
+FRAUD_MODEL = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+MISSING_MODEL = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,nonexistent_model_xyz,PROD)"
+
 
 @pytest.fixture
 def runner() -> CliRunner:
@@ -148,7 +151,9 @@ def test_policy_show_marks_overrides(runner: CliRunner, tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_resolve_command_runs_successfully(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_command_runs_successfully(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
     mock_source = MagicMock()
     mock_source.get_entity.return_value = None
     mock_source.get_entities.return_value = {}
@@ -156,7 +161,7 @@ def test_resolve_command_runs_successfully(runner: CliRunner, monkeypatch: pytes
     mock_source.list_schema_fields.return_value = []
     monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
 
-    result = runner.invoke(main, ["resolve", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"])
+    result = runner.invoke(main, ["resolve", "--model", FRAUD_MODEL])
     assert result.exit_code == EXIT_OK
     assert "Footprint resolved" in output_of(result)
 
@@ -178,10 +183,7 @@ def test_check_fails_closed_when_nothing_resolves(
     mock_source.list_schema_fields.return_value = []
     monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
 
-    result = runner.invoke(
-        main,
-        ["check", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,nonexistent_model_xyz,PROD)"],
-    )
+    result = runner.invoke(main, ["check", "--model", MISSING_MODEL])
     assert result.exit_code == EXIT_ERROR
     assert "Resolved nothing upstream" in output_of(result)
 
@@ -198,14 +200,54 @@ def test_check_fails_closed_when_datahub_is_unreachable(
     mock_source.list_schema_fields.return_value = []
     monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
 
-    result = runner.invoke(
-        main,
-        ["check", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"],
-    )
+    result = runner.invoke(main, ["check", "--model", FRAUD_MODEL])
     assert result.exit_code == EXIT_ERROR
     assert "Cannot reach DataHub" in output_of(result)
 
 
+
+
+def test_investigate_without_mcp_says_so(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mock_source = MagicMock()
+    mock_source.connection_error = None
+    mock_source.get_entity.return_value = None
+    mock_source.get_entities.return_value = {}
+    mock_source.get_lineage.return_value = []
+    mock_source.list_schema_fields.return_value = []
+    monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
+
+    result = runner.invoke(main, ["check", "--model", FRAUD_MODEL, "--investigate"])
+
+    assert "--investigate requires --mcp" in output_of(result)
+
+
+def test_investigate_without_a_key_says_so_rather_than_degrading_in_silence(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug this pins: `--investigate` with no key looked exactly like success.
+
+    Same output, same exit code, no message — so the only conclusion available
+    to someone running it was that the agent loop does nothing at all.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    mock_source = MagicMock()
+    mock_source.connection_error = None
+    mock_source.get_entity.return_value = None
+    mock_source.get_entities.return_value = {}
+    mock_source.get_lineage.return_value = []
+    mock_source.list_schema_fields.return_value = []
+    monkeypatch.setattr("undertow.cli.McpToolExecutor", lambda *a, **kw: MagicMock())
+    monkeypatch.setattr("undertow.cli.McpLineageSource", lambda *a, **kw: mock_source)
+
+    result = runner.invoke(
+        main, ["check", "--model", FRAUD_MODEL, "--mcp", "--investigate"]
+    )
+
+    output = output_of(result)
+    assert "--investigate is not available" in output
+    assert "ANTHROPIC_API_KEY" in output
 
 
 def test_check_reports_a_bad_policy_before_anything_else(

@@ -30,15 +30,22 @@ import os
 import sys
 import tempfile
 import threading
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, suppress
 from typing import Any
 
 DEFAULT_TIMEOUT_SEC = 60.0
-# Startup is bounded far tighter than a tool call. A misconfigured server dies
+# Startup is bounded tighter than a tool call. A misconfigured server dies
 # almost immediately, and the stdio transport does not surface that as an error —
 # it simply stops talking. Without a separate, shorter budget, a crashed
 # subprocess costs a full call timeout of silence before anyone is told why.
-DEFAULT_STARTUP_TIMEOUT_SEC = 20.0
+#
+# Not *too* tight, though. The server imports the DataHub SDK and fastmcp before
+# it answers, and on a cold filesystem cache that has been observed to take
+# longer than 20s — which surfaced as "cannot reach DataHub" on a run where
+# DataHub was fine. A spurious startup failure reads as a broken integration,
+# so the budget is set well above the observed worst case rather than near it.
+# Override with UNDERTOW_MCP_STARTUP_TIMEOUT for slower machines.
+DEFAULT_STARTUP_TIMEOUT_SEC = float(os.environ.get("UNDERTOW_MCP_STARTUP_TIMEOUT", "60"))
 
 # The OSS tool surface, as reported by tools/list on mcp-server-datahub 0.6.0.
 # Kept here so a drift between what Undertow expects and what the server offers
@@ -83,7 +90,8 @@ class McpToolExecutor:
         # console script: it works from a venv, a Store Python, and CI without
         # depending on the script directory being on PATH.
         self.command = command or sys.executable
-        self.args = args if args is not None else ["-m", "mcp_server_datahub", "--transport", "stdio"]
+        default_args = ["-m", "mcp_server_datahub", "--transport", "stdio"]
+        self.args = args if args is not None else default_args
         self.timeout = timeout
         self.startup_timeout = startup_timeout
         self.env = self._build_env(env)
@@ -122,6 +130,8 @@ class McpToolExecutor:
         if self._thread is not None:
             return
 
+        self._preflight()
+
         # The server logs its GraphQL traffic at debug level, and `stdio_client`
         # sends the child's stderr straight to ours by default. On a healthy run
         # that buries the verdict under a query dump; on a failed start it is the
@@ -130,7 +140,13 @@ class McpToolExecutor:
         #
         # A real file rather than a StringIO because the child needs a genuine
         # file descriptor to inherit.
-        self._stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
+        #
+        # Deliberately not a context manager (SIM115): the handle outlives this
+        # function by design — the subprocess writes to it for the whole session
+        # and `close()` owns its teardown.
+        self._stderr_file = tempfile.TemporaryFile(  # noqa: SIM115
+            mode="w+", encoding="utf-8", errors="replace"
+        )
 
         ready = threading.Event()
         error: list[BaseException] = []
@@ -164,6 +180,32 @@ class McpToolExecutor:
                 + self._captured_stderr()
             ) from error[0]
 
+    def _preflight(self) -> None:
+        """Fail on a missing package before paying the startup timeout for it.
+
+        Without this, a missing `mcp-server-datahub` presents as `python -m
+        mcp_server_datahub` exiting instantly, the session never initialising,
+        and a 20-second wait ending in "timed out starting the server" — which
+        reads as "DataHub is unreachable" and sends the reader to check a URL
+        that was never the problem. The install is the problem; say so.
+
+        Only the default invocation is checked. A caller who passed an explicit
+        `command`/`args` is pointing at a server we cannot introspect, and
+        guessing at its packaging would be worse than letting it speak for itself.
+        """
+        if self.command != sys.executable or self.args[:2] != ["-m", "mcp_server_datahub"]:
+            return
+
+        import importlib.util
+
+        for module, package in (("mcp", "mcp"), ("mcp_server_datahub", "mcp-server-datahub")):
+            if importlib.util.find_spec(module) is None:
+                raise McpError(
+                    f"`{package}` is not installed, so the MCP read path is unavailable. "
+                    'Install it with `pip install -e ".[mcp]"`, or drop `--mcp` to resolve '
+                    "through the Python SDK instead — both paths produce the same verdict."
+                )
+
     def _captured_stderr(self, max_lines: int = 15) -> str:
         """The child's last words, for use in a startup failure message.
 
@@ -182,16 +224,21 @@ class McpToolExecutor:
         if not lines:
             return ""
         tail = lines[-max_lines:]
-        elided = "" if len(lines) <= max_lines else f"  ... {len(lines) - max_lines} earlier lines\n"
+        elided = (
+            ""
+            if len(lines) <= max_lines
+            else f"  ... {len(lines) - max_lines} earlier lines\n"
+        )
         return "\n\nServer output:\n" + elided + "\n".join(f"  {ln}" for ln in tail)
 
     async def _connect(self) -> None:
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
-        except ImportError as exc:  # pragma: no cover - dependency is declared
+        except ImportError as exc:  # pragma: no cover - covered by the preflight in start()
             raise McpError(
-                "The `mcp` client SDK is not installed. Install Undertow's `mcp` extra."
+                "The `mcp` client SDK is not installed. "
+                'Install it with `pip install -e ".[mcp]"`.'
             ) from exc
 
         params = StdioServerParameters(command=self.command, args=self.args, env=self.env)
@@ -224,10 +271,9 @@ class McpToolExecutor:
             self._thread = None
             self._session = None
             if self._stderr_file is not None:
-                try:
+                # Closing a diagnostics temp file must never fail a run.
+                with suppress(Exception):
                     self._stderr_file.close()
-                except Exception:  # noqa: BLE001 - closing a temp file must not fail a run
-                    pass
                 self._stderr_file = None
 
     async def _disconnect(self) -> None:

@@ -7,7 +7,10 @@ name = "undertow"
 version = "0.1.0"
 description = "Lineage-grounded pre-deploy gate for production ML models, built on DataHub."
 readme = "README.md"
-requires-python = ">=3.10"
+# 3.11 is the floor because `mcp-server-datahub` requires it, and the MCP read
+# path is a first-class feature rather than an afterthought. Claiming 3.10 while
+# the flagship integration cannot install there is worse than not claiming it.
+requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 keywords = ["datahub", "mlops", "lineage", "data-quality", "drift"]
 
@@ -22,10 +25,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The narrator is optional by design: the reporter falls back to templates so a
-# missing key degrades prose, never the verdict.
+# `--mcp`: reads resolve through the DataHub MCP server over stdio. The client
+# library and the server are separate packages and Undertow needs both — the
+# client to speak the protocol, the server to be the thing it speaks to.
+mcp = [
+    "mcp>=1.0,<2",
+    "mcp-server-datahub>=0.6,<1",
+]
+# `--investigate` and LLM narration. Optional by design: the reporter falls back
+# to templates and the investigator skips, so a missing key degrades prose and
+# context, never the verdict.
+llm = ["anthropic>=0.40,<1"]
+# Retained so `pip install undertow[narrator]` keeps working.
 narrator = ["anthropic>=0.40,<1"]
+# Everything a reviewer needs to exercise every documented command. `[dev]` is
+# what the README tells people to install, so it has to be complete: an install
+# that silently omits `--mcp` and `--investigate` is how a working feature reads
+# as a broken one.
 dev = [
+    "mcp>=1.0,<2",
+    "mcp-server-datahub>=0.6,<1",
+    "anthropic>=0.40,<1",
     "pytest>=8.0,<9",
     "pytest-cov>=5.0,<6",
     "ruff>=0.6,<1",
@@ -48,13 +68,13 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 # The DataHub SDK ships partial stubs; don't let that block strictness on our code.
 [[tool.mypy.overrides]]

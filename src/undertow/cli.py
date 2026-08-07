@@ -15,7 +15,7 @@ import json
 import os
 import sys
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 import click
@@ -27,13 +27,12 @@ from undertow import __version__
 from undertow.attributor import attribute_findings
 from undertow.differ import diff_snapshots
 from undertow.engine import PolicyViolation, evaluate, validate_policy
-from undertow.investigator import investigate_findings
-from undertow.models import FindingKind, Severity, UndertowSnapshot
-from undertow.narrator import narrate
+from undertow.investigator import investigate_findings, investigation_unavailable_reason
+from undertow.models import FindingKind, UndertowSnapshot
+from undertow.narrator import generate_narrative_detailed
 from undertow.policy import Policy
 from undertow.reporter import (
     MLModelPatchBuilder,
-    format_console,
     format_github_comment,
     render_console,
     write_verdict_to_datahub,
@@ -45,17 +44,17 @@ from undertow.resolver import (
     SdkLineageSource,
     resolve_footprint,
 )
+from undertow.resolver.base import LineageSource
 
-if hasattr(sys.stdout, "reconfigure"):
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
-if hasattr(sys.stderr, "reconfigure"):
-    try:
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
+# The verdict box is drawn with box-drawing characters and the report carries
+# owner handles, so a console that cannot encode UTF-8 turns a BLOCK into a
+# UnicodeEncodeError — a gate that crashes while trying to say "stop". Windows
+# CI is the usual culprit. Best-effort: if the stream cannot be reconfigured,
+# `errors="replace"` was never available and there is nothing else to try.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        with suppress(Exception):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
 
 # Diagnostics go to stderr so stdout stays clean for piped output.
 console = Console()
@@ -70,7 +69,7 @@ DEFAULT_POLICY_PATH = "undertow.yaml"
 
 
 @contextmanager
-def _lineage_source(use_mcp: bool) -> Iterator[object]:
+def _lineage_source(use_mcp: bool) -> Iterator[LineageSource]:
     """Yield a connected lineage source, tearing down the MCP subprocess after.
 
     The MCP path owns a child process and an initialised session, so it has a
@@ -128,7 +127,7 @@ def _load_baseline(
                 f"[yellow]Could not load baseline from {baseline_path}:[/yellow] {exc}"
             )
 
-    from_graph = getattr(footprint, "baseline_snapshot", None)
+    from_graph: UndertowSnapshot | None = getattr(footprint, "baseline_snapshot", None)
     if from_graph is not None:
         return from_graph
 
@@ -329,7 +328,9 @@ def baseline(model_urn: str, config_path: str, use_mcp: bool) -> None:
             f.write(snapshot_json)
 
         console.print(f"[green]Baseline captured and stored for {model_urn}[/green]")
-        console.print(f"  Stored in DataHub structuredProperty 'undertow_baseline' and {local_path}")
+        console.print(
+            f"  Stored in DataHub structuredProperty 'undertow_baseline' and {local_path}"
+        )
         raise SystemExit(EXIT_OK)
     except SystemExit:
         raise
@@ -401,6 +402,20 @@ def check(
         )
         use_investigator = False
 
+    # Say it before the work starts, not after. An investigation that cannot run
+    # produces output identical to a run without the flag, and a reader with no
+    # message to go on will conclude the agent does nothing rather than that it
+    # was never reachable.
+    if use_investigator:
+        reason = investigation_unavailable_reason()
+        if reason:
+            err_console.print(
+                f"[yellow]--investigate is not available:[/yellow] {reason}\n"
+                "Continuing without investigation — the verdict is unaffected either "
+                "way, since the agent only ever adds context to it."
+            )
+            use_investigator = False
+
     # Steps 1–4 all need the graph, so they share one source lifetime: closing it
     # after resolution would tear down the MCP subprocess before the investigator
     # could ask a single question. Everything after this block is pure.
@@ -420,7 +435,13 @@ def check(
 
             # 4. Investigate. Enrichment only — see undertow/investigator.
             if use_investigator and findings:
-                findings = investigate_findings(findings, source)
+                findings = investigate_findings(
+                    findings,
+                    source,
+                    on_skip=lambda why: err_console.print(
+                        f"[yellow]Investigation skipped:[/yellow] {why}"
+                    ),
+                )
     except SystemExit:
         raise
     except Exception as exc:
@@ -437,8 +458,10 @@ def check(
         baseline_ref=baseline_ref,
     )
 
-    # 6. Narrator
-    narrative = narrate(verdict)
+    # 6. Narrator. The fallback renders the same findings the reporter already
+    #    prints, so it is only worth a "Narrative Summary" heading when an LLM
+    #    actually wrote something the structured report does not already say.
+    narrative, narrative_is_llm = generate_narrative_detailed(verdict)
 
     # 7. Write-back happens *before* rendering so the report can state what
     #    actually landed. Printing "Written to DataHub" from the flag rather than
@@ -460,7 +483,9 @@ def check(
 
     # GitHub PR summary if in GitHub Actions
     if os.environ.get("GITHUB_ACTIONS") or os.environ.get("GITHUB_STEP_SUMMARY"):
-        gh_comment = format_github_comment(verdict, narrative=narrative)
+        gh_comment = format_github_comment(
+            verdict, narrative=narrative if narrative_is_llm else None
+        )
         summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary_path:
             with open(summary_path, "a", encoding="utf-8") as f:

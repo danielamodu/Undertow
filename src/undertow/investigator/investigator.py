@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 from typing import Any
 
 from undertow.models import Finding
@@ -134,6 +135,21 @@ class InvestigationUnavailable(RuntimeError):
     """No API key, no SDK, or no MCP source — investigation is skipped, not failed."""
 
 
+def unavailable_reason() -> str | None:
+    """Why investigation cannot run, or `None` if it can.
+
+    Exists so a caller can say *why* nothing happened before doing the work.
+    Skipping quietly is the failure mode that matters here: `--investigate` with
+    no key produces output byte-identical to a run without the flag, and the
+    only available reading of that is that the agent does nothing.
+    """
+    try:
+        _default_client()
+    except InvestigationUnavailable as exc:
+        return str(exc)
+    return None
+
+
 def investigate_findings(
     findings: list[Finding],
     source: Any,
@@ -142,6 +158,7 @@ def investigate_findings(
     model: str = "claude-opus-5",
     max_turns: int = 6,
     max_findings: int = 3,
+    on_skip: Callable[[str], None] | None = None,
 ) -> list[Finding]:
     """Enrich findings with investigated context. Never changes severity.
 
@@ -149,13 +166,19 @@ def investigate_findings(
     not warrant twenty agent loops in a CI gate. The most severe are already
     sorted first by the time a reporter sees them, but this runs before ruling,
     so it investigates in the order the differs emitted.
+
+    `on_skip` is called with a reason when investigation cannot run at all. The
+    findings still come back unchanged — enrichment failing must never fail a
+    gate — but the caller gets the chance to say so out loud.
     """
     if not findings:
         return findings
 
     try:
         client = client or _default_client()
-    except InvestigationUnavailable:
+    except InvestigationUnavailable as exc:
+        if on_skip is not None:
+            on_skip(str(exc))
         return findings
 
     enriched: list[Finding] = []
@@ -184,11 +207,12 @@ def investigate_findings(
 def _default_client() -> Any:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise InvestigationUnavailable("ANTHROPIC_API_KEY is not set.")
+
     try:
         import anthropic
     except ImportError as exc:
         raise InvestigationUnavailable(
-            "The `anthropic` package is not installed. Install Undertow's `narrator` extra."
+            'the `anthropic` package is not installed (`pip install -e ".[llm]"`).'
         ) from exc
     return anthropic.Anthropic()
 
@@ -306,4 +330,9 @@ def _brief(finding: Finding) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["investigate_findings", "InvestigationUnavailable", "INVESTIGATION_TOOLS"]
+__all__ = [
+    "investigate_findings",
+    "unavailable_reason",
+    "InvestigationUnavailable",
+    "INVESTIGATION_TOOLS",
+]

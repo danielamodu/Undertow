@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from undertow.engine import evaluate
-from undertow.investigator import investigate_findings
+from undertow.investigator import investigate_findings, investigation_unavailable_reason
 from undertow.models import (
     AttributionHop,
     AttributionPath,
@@ -267,8 +269,13 @@ def test_only_the_first_n_findings_are_investigated() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_no_client_returns_findings_untouched() -> None:
-    """No API key is a normal state, not an error — the gate still works."""
+def test_no_client_returns_findings_untouched(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No API key is a normal state, not an error — the gate still works.
+
+    The key is cleared explicitly: without that, a developer who happens to have
+    one exported turns this into a live API call against a stub source.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     findings = [dropped_column()]
     assert investigate_findings(findings, StubSource(), client=None) is findings or True
 
@@ -295,3 +302,53 @@ def test_a_crashing_client_degrades_to_an_evidence_note() -> None:
 
 def test_empty_findings_short_circuits() -> None:
     assert investigate_findings([], StubSource()) == []
+
+
+# --------------------------------------------------------------------------
+# Failing soft, but never failing silently
+# --------------------------------------------------------------------------
+#
+# Degrading quietly is the specific bug these pin. `--investigate` with no key
+# produced output byte-identical to a run without the flag, so the only reading
+# available to someone watching was that the agent does nothing.
+
+
+def test_unavailable_reason_names_the_missing_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    reason = investigation_unavailable_reason()
+
+    assert reason is not None
+    assert "ANTHROPIC_API_KEY" in reason
+
+
+def test_unavailable_reason_is_none_when_investigation_can_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-a-real-key")
+
+    assert investigation_unavailable_reason() is None
+
+
+def test_skipping_calls_back_with_a_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    skipped: list[str] = []
+
+    findings = [dropped_column()]
+    result = investigate_findings(findings, StubSource(), on_skip=skipped.append)
+
+    assert len(skipped) == 1
+    assert "ANTHROPIC_API_KEY" in skipped[0]
+    # Still fails soft: the findings survive untouched and the gate still rules.
+    assert result == findings
+    assert evaluate(result, Policy.default(), model_urn=MODEL).severity is Severity.BLOCK
+
+
+def test_no_callback_still_returns_findings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`on_skip` is optional — omitting it must not turn a skip into a crash."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    findings = [dropped_column()]
+
+    assert investigate_findings(findings, StubSource()) == findings

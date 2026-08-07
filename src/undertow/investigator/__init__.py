@@ -9,5 +9,15 @@ from undertow.investigator.investigator import (
     InvestigationUnavailable,
     investigate_findings,
 )
+from undertow.investigator.investigator import (
+    # Qualified at the package boundary: `unavailable_reason` is unambiguous
+    # inside this module and says nothing about what at the call site.
+    unavailable_reason as investigation_unavailable_reason,
+)
 
-__all__ = ["investigate_findings", "InvestigationUnavailable", "INVESTIGATION_TOOLS"]
+__all__ = [
+    "investigate_findings",
+    "investigation_unavailable_reason",
+    "InvestigationUnavailable",
+    "INVESTIGATION_TOOLS",
+]
