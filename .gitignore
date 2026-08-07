@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Undertow's local baseline store. Snapshots are reproducible from DataHub,
+# so they are cache, not source.
+.undertow/
+undertow-report.json
+
+.env
+.DS_Store
+.idea/
+.vscode/

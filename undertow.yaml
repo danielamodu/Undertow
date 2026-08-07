@@ -1,0 +1,67 @@
+# Undertow policy.
+#
+# This file is optional — Undertow ships with these values as defaults. Commit
+# one when your team wants to override them, and the override becomes a
+# reviewable decision rather than a tribal convention.
+
+# How deep to walk upstream from a feature's source dataset.
+max_hops: 5
+
+# Severity per finding kind. Two categories, and the distinction is enforced
+# by the engine rather than by convention:
+#
+#   CERTAIN  — read straight off the graph. A column is present or it isn't.
+#   PROBABLE — statistical inference. Always warns (see allow_probable_block).
+rules:
+  # CERTAIN — these stop a deploy.
+  COLUMN_DROPPED: BLOCK
+  COLUMN_TYPE_CHANGED: BLOCK
+  ASSET_DEPRECATED: BLOCK
+
+  # CERTAIN, but not deploy-stopping on their own.
+  COLUMN_NULLABILITY_RELAXED: WARN
+  OWNERSHIP_LOST: WARN
+  NEW_SENSITIVE_TAG: WARN
+
+  # PROBABLE — statistical. Setting any of these to BLOCK has no effect
+  # unless allow_probable_block is true; the engine downgrades them.
+  NULL_RATE_JUMP: WARN
+  CARDINALITY_CHANGE: WARN
+  MEAN_SHIFT: WARN
+  RANGE_VIOLATION: WARN
+  ROW_COUNT_CHANGE: WARN
+  DISTRIBUTION_SHIFT: WARN
+
+thresholds:
+  # Tier 1 — computed from DataHub's default profiling output. These fire on a
+  # stock instance with no profiler configuration.
+  null_rate_jump_pp: 10.0        # percentage points, absolute change
+  cardinality_change_pct: 50.0
+  mean_shift_sigma: 3.0
+  row_count_change_pct: 50.0
+
+  # Tier 2 — needs quantiles, histograms, or distinct value frequencies, all of
+  # which are `default=False` in DataHub's GE profiler config. If you haven't
+  # enabled them, PSI simply never fires and Tier 1 carries the drift signal.
+  psi: 0.20
+
+# Let statistical findings block. Off by default, and think hard before
+# enabling: a false BLOCK is the fastest way to get a gate deleted.
+allow_probable_block: false
+
+# Accepted risks. Both `reason` and `expires` are mandatory — Undertow refuses
+# to load an exemption without them, because a permanent silent exemption is
+# how a gate rots into decoration.
+#
+# Exempted findings are DOWNGRADED, never hidden. They still appear in the
+# report with the reason and expiry attached.
+exemptions: []
+  # - reason: "migrating amount_usd -> amount_cents, tracked in DATA-1421"
+  #   expires: 2026-08-31T00:00:00Z
+  #   kind: COLUMN_DROPPED
+  #   column: amount_usd
+  #   downgrade_to: WARN
+  #
+  # - reason: "staging is expected to churn"
+  #   expires: 2026-09-30T00:00:00Z
+  #   urn_pattern: "*staging*"

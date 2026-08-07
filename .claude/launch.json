@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "datahub",
+      "url": "http://localhost:9002",
+      "port": 9002
+    },
+    {
+      "name": "tests",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "pytest", "-q", "--no-header", "-p", "no:cacheprovider"],
+      "port": 9899
+    }
+  ]
+}
