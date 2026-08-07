@@ -22,6 +22,9 @@ dependencies = [
     "pyyaml>=6.0,<7",
     "click>=8.1,<9",
     "rich>=13.7,<14",
+    # Core, not optional: the narrator's template fallback is imported at module
+    # scope by the CLI, so without this `undertow --version` does not start.
+    "jinja2>=3.1,<4",
 ]
 
 [project.optional-dependencies]

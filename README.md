@@ -266,7 +266,7 @@ Undertow holds no database of its own. DataHub is the source of truth for topolo
 
 **`MLModelPatchBuilder` for `datahub/specific/`**
 
-- **Upstream PR: [datahub-project/datahub#18979](https://github.com/datahub-project/datahub/pull/18979)** — builder + 12 tests, against `master`
+- **Upstream PR: [datahub-project/datahub#18979](https://github.com/datahub-project/datahub/pull/18979)** — builder + 13 tests, against `master`
 - Issue it closes: [datahub-project/datahub#18971](https://github.com/datahub-project/datahub/issues/18971)
 - The same code, vendored here so Undertow runs today: [`contrib/datahub-mlmodel-patch-builder/`](contrib/datahub-mlmodel-patch-builder/)
 
@@ -283,7 +283,7 @@ Undertow writes `undertow_risk_verdict`, `undertow_last_checked`, and `undertow_
 
 The evidence is in [`examples/datahub-writeback.json`](examples/datahub-writeback.json): a `probe_alpha` property written by something else is still on the model after Undertow wrote three properties of its own. An `UPSERT` would have removed it.
 
-The proposed builder composes DataHub's existing entity-agnostic mixins (`HasOwnershipPatch`, `HasTagsPatch`, `HasStructuredPropertiesPatch`, …) exactly as `DataProductPatchBuilder` does — no new machinery, just the missing composition, and 19 mutation methods rather than the 2 our vendored version exposes. It ships with a six-test suite that runs without DataHub:
+The proposed builder composes DataHub's existing entity-agnostic mixins (`HasOwnershipPatch`, `HasTagsPatch`, `HasStructuredPropertiesPatch`, …) exactly as `DataProductPatchBuilder` does — no new machinery, just the missing composition. It ships with a 13-test suite that runs without DataHub:
 
 ```bash
 pytest contrib/datahub-mlmodel-patch-builder/ -q

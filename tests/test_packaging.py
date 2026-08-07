@@ -17,32 +17,63 @@ So these assert against the declared metadata, not the environment.
 
 from __future__ import annotations
 
+import ast
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+ROOT = Path(__file__).resolve().parent.parent
+PYPROJECT = ROOT / "pyproject.toml"
+SRC = ROOT / "src"
 
 # The command the README tells a reviewer to run. If that changes, change this,
 # and think hard about what the new one leaves out.
 DOCUMENTED_INSTALL_EXTRA = "dev"
 
-# Third-party distributions imported anywhere under `src/undertow`, mapped from
-# import name to the distribution that provides it. `mcp_server_datahub` is not
-# imported — it is launched as `python -m mcp_server_datahub` — which is exactly
-# why a linter never caught its absence.
-REQUIRED_DISTRIBUTIONS = {
-    "acryl-datahub",
-    "anthropic",
-    "click",
-    "mcp",
-    "mcp-server-datahub",
-    "pydantic",
-    "pyyaml",
-    "rich",
+# Import name -> distribution name, for the cases where they differ. Anything
+# not listed is assumed to share its name with its distribution, which is true
+# for every other dependency here.
+DISTRIBUTION_OF = {
+    "datahub": "acryl-datahub",
+    "yaml": "pyyaml",
+    "jinja2": "jinja2",
 }
+
+# Never imported — launched as `python -m mcp_server_datahub` — so no amount of
+# scanning import statements will find it. That is precisely how it went missing.
+LAUNCHED_NOT_IMPORTED = {"mcp-server-datahub"}
+
+FIRST_PARTY = {"undertow"}
+
+
+def third_party_imports() -> dict[str, set[str]]:
+    """Every non-stdlib, non-first-party module imported under `src/`.
+
+    Derived by walking the AST rather than kept as a hand-maintained list: the
+    original bug was a dependency nobody remembered to write down, and a list
+    that has to be remembered would have exactly the same failure mode.
+    """
+    found: dict[str, set[str]] = {}
+    for path in SRC.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module] if node.module and node.level == 0 else []
+            else:
+                continue
+            for name in names:
+                root = name.split(".")[0]
+                if not root or root in sys.stdlib_module_names or root in FIRST_PARTY:
+                    continue
+                found.setdefault(
+                    DISTRIBUTION_OF.get(root, root), set()
+                ).add(str(path.relative_to(ROOT)))
+    return found
 
 
 @pytest.fixture(scope="module")
@@ -78,12 +109,39 @@ def test_documented_install_provides_every_import_the_code_makes(
         project["optional-dependencies"][DOCUMENTED_INSTALL_EXTRA]
     )
 
-    missing = REQUIRED_DISTRIBUTIONS - declared
+    imported = third_party_imports()
+    required = set(imported) | LAUNCHED_NOT_IMPORTED
+    missing = required - declared
+
+    def where(dist: str) -> str:
+        return ", ".join(sorted(imported.get(dist, {"(launched as a subprocess)"})))
+
+    detail = "\n".join(f"  {dist} — imported by {where(dist)}" for dist in sorted(missing))
+    assert not missing, (
+        f'Not installed by `pip install -e ".[{DOCUMENTED_INSTALL_EXTRA}]"`:\n{detail}\n'
+        "A reviewer following the README would hit ImportError on first run."
+    )
+
+
+def test_the_cli_starts_on_a_core_install(pyproject: dict[str, Any]) -> None:
+    """Anything `undertow.cli` reaches at import time must be a core dependency.
+
+    `jinja2` was not, and it is imported at module scope by the narrator, which
+    the CLI imports unconditionally. On a machine where nothing else had pulled
+    it in, `undertow --version` raised ModuleNotFoundError before printing
+    anything — the entire tool, not just an optional path.
+
+    The extras are for things guarded behind a flag and a try/except. Import-time
+    dependencies are not optional, whatever the packaging says.
+    """
+    core = distributions_in(pyproject["project"]["dependencies"])
+
+    import_time = {"click", "rich", "pydantic", "pyyaml", "acryl-datahub", "jinja2"}
+    missing = import_time - core
 
     assert not missing, (
-        f"{sorted(missing)} are imported or launched by src/undertow but are not "
-        f'installed by `pip install -e ".[{DOCUMENTED_INSTALL_EXTRA}]"`. A reviewer '
-        "following the README would hit ImportError on first run."
+        f"{sorted(missing)} are imported at module scope but are not core "
+        "dependencies, so a core install cannot start the CLI."
     )
 
 

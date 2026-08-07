@@ -11,8 +11,9 @@ SDK rather than waiting on the PR to merge.
 | [`mlmodel.py`](mlmodel.py) | `metadata-ingestion/src/datahub/specific/mlmodel.py` |
 | [`test_mlmodel_patch_builder.py`](test_mlmodel_patch_builder.py) | `metadata-ingestion/tests/unit/patch/test_mlmodel_patch_builder.py` |
 
-The upstream version carries the full `mlModelProperties` setter surface and 12
-tests; the copy here is the minimal subset Undertow actually calls.
+Both files are byte-identical to the submitted versions, except that the test
+imports the module sitting next to it rather than `datahub.specific.mlmodel`,
+which only resolves once the PR lands.
 
 ## The gap
 
@@ -71,9 +72,12 @@ that.
 pytest contrib/datahub-mlmodel-patch-builder/ -q
 ```
 
-Six tests, no DataHub required. They assert the proposals carry `changeType=PATCH`,
+13 tests, no DataHub required. They assert the proposals carry `changeType=PATCH`,
 resolve `entityType=mlModel` from the URN alone, address each structured property at its
-own JSON-Patch path rather than the aspect root, and expose the inherited mixin methods.
+own JSON-Patch path rather than the aspect root, patch the canonical `hyperParams` field
+rather than the deprecated `hyperParameters` map, add and remove `mlFeatures` entries
+individually instead of rewriting the array, and route tags and ownership through the
+inherited mixins.
 
 ## Scope note
 
