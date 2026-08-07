@@ -12,3 +12,5 @@
 │   Confidence: CERTAIN (column dropped)                                                │
 │                                                                                       │
 └───────────────────────────────────────────────────────────────────────────────────────┘
+
+  statistics: Compared statistics on 2/13 columns across 3/6 assets.

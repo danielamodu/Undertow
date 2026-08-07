@@ -65,10 +65,43 @@ above either model, which is the whole point: nothing model-local can see it.
 | File | What it is | Exit |
 |---|---|---|
 | `verdict-clear.txt` | `check` on an unchanged graph. | **0** |
+| `verdict-warn.txt` | `check` after a 4.8σ distribution shift. `PROBABLE`, so it warns and gets out of the way. | **0** |
 | `verdict-block.txt` | `check` after the column drop, with the full attribution path. | **1** |
 | `verdict-blast-radius.txt` | The same drop, checked from *both* models. Two teams, one column. | **1** and **1** |
 | `github-pr-comment.md` | What lands in the PR, generated via `GITHUB_STEP_SUMMARY`. | — |
 | `datahub-writeback.json` | The aspects Undertow wrote, **read back out of GMS** to prove they landed. | — |
+
+## CERTAIN and PROBABLE, side by side
+
+`verdict-block.txt` and `verdict-warn.txt` are the same gate on the same graph,
+reacting to two different kinds of change:
+
+| | `make break` | `make break-stats` |
+|---|---|---|
+| What changed | `transaction_amount` dropped | mean of `amount` moved 125.5 → 342.1 |
+| Read from | `schemaMetadata` — a fact | `datasetProfile` — an inference |
+| Confidence | `CERTAIN` | `PROBABLE` |
+| Verdict | BLOCK | WARN |
+| Exit | **1** | **0** |
+
+The policy engine will not let a `PROBABLE` finding block a deploy unless a team
+sets `allow_probable_block: true` deliberately. A distribution moving is evidence
+something *may* be wrong, and a gate that stops deploys on evidence that weak
+gets switched off within a month.
+
+## What the last line of every report says
+
+```
+statistics: Compared statistics on 3/14 columns across 3/6 assets.
+```
+
+Undertow only computes statistics DataHub profiles by default, and profiling is
+opt-in per source — so most real footprints are partly unprofiled. A missing
+statistic means *cannot assess*, never *no drift*, and the report says which.
+
+That line is why `verdict-clear.txt` is an honest artifact rather than a
+reassuring one: it clears the deploy while stating that it could only compare 3
+of 14 columns. Where nothing is profiled at all, the line turns yellow.
 
 ## Exit codes
 

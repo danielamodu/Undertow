@@ -25,7 +25,7 @@ from rich.table import Table
 
 from undertow import __version__
 from undertow.attributor import attribute_findings
-from undertow.differ import diff_snapshots
+from undertow.differ import diff_snapshots, profile_coverage
 from undertow.engine import PolicyViolation, evaluate, validate_policy
 from undertow.investigator import investigate_findings, investigation_unavailable_reason
 from undertow.models import FindingKind, UndertowSnapshot
@@ -478,8 +478,13 @@ def check(
         except Exception as exc:
             err_console.print(f"[yellow]DataHub write-back failed:[/yellow] {exc}")
 
-    # 8. Reporter
-    render_console(verdict, written_to_datahub=wrote_to_datahub)
+    # 8. Reporter. Coverage rides along so the report can qualify a quiet
+    #    verdict: silence from the statistical differ means "nothing found"
+    #    only where there was something to look at.
+    coverage = (
+        profile_coverage(baseline_snapshot, current_snapshot) if baseline_snapshot else None
+    )
+    render_console(verdict, written_to_datahub=wrote_to_datahub, coverage=coverage)
 
     # GitHub PR summary if in GitHub Actions
     if os.environ.get("GITHUB_ACTIONS") or os.environ.get("GITHUB_STEP_SUMMARY"):

@@ -19,6 +19,16 @@ baseline:
 break:
 	python scripts/break_schema.py
 
+# The other half of the demo. A dropped column is CERTAIN and blocks; a shifted
+# distribution is PROBABLE and only warns. Running both is what shows the gate
+# can tell the difference.
+break-stats:
+	python scripts/drift_stats.py
+
+# WARN exits 0, so this target succeeds. `--fail-on-warn` is the opt-in.
+check-warn:
+	undertow check --model "$(FRAUD)"
+
 reset:
 	python scripts/reset_demo.py
 
@@ -57,5 +67,5 @@ lint:
 	ruff check src/ tests/ scripts/
 	mypy src/
 
-.PHONY: install quickstart seed baseline break reset check check-churn check-write \
-        blast-radius check-mcp check-investigate demo test lint
+.PHONY: install quickstart seed baseline break break-stats reset check check-churn \
+        check-warn check-write blast-radius check-mcp check-investigate demo test lint

@@ -1,1 +1,3 @@
 🟢 CLEAR — fraud_detector_v3 (6 assets checked, no material change)
+
+  statistics: Compared statistics on 3/14 columns across 3/6 assets.

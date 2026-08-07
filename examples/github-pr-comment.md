@@ -1,7 +1,7 @@
 ## 🔴 Undertow ML Gate: BLOCKED
 
 **Model URN:** `urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)`
-**Assets Checked:** 6 | **Checked At:** 2026-08-07T16:46:20.691056+00:00
+**Assets Checked:** 6 | **Checked At:** 2026-08-07T21:08:14.432296+00:00
 
 ### 🔴 Blocking Findings (1)
 

@@ -13,7 +13,7 @@
     },
     {
       "propertyUrn": "urn:li:structuredProperty:undertow_baseline",
-      "value": "{\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"captured_at\":\"2026-08-07T16:32:39.782952Z\",\"assets\":{\"urn:li:mlM  ...[truncated: full UndertowSnapshot JSON, 3626 chars]"
+      "value": "{\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"captured_at\":\"2026-08-07T21:01:39.980421Z\",\"assets\":{\"urn:li:mlM  ...[truncated: full UndertowSnapshot JSON, 4350 chars]"
     },
     {
       "propertyUrn": "urn:li:structuredProperty:undertow_risk_verdict",
@@ -21,7 +21,7 @@
     },
     {
       "propertyUrn": "urn:li:structuredProperty:undertow_last_checked",
-      "value": "2026-08-07T16:46:20.691056+00:00"
+      "value": "2026-08-07T21:08:14.432296+00:00"
     }
   ],
   "institutionalMemory": {
@@ -29,7 +29,7 @@
       {
         "createStamp": {
           "actor": "urn:li:corpuser:undertow",
-          "time": 1786121180691
+          "time": 1786136894432
         },
         "description": "Undertow Verdict: BLOCK \u2014 1 blocking, 0 warning",
         "url": "https://github.com/danielamodu/Undertow"
@@ -62,9 +62,9 @@
       }
     },
     "assertionUrn": "urn:li:assertion:c3e79c057400bc9ad701b995812a3f0d",
-    "timestampMillis": 1786121180691,
+    "timestampMillis": 1786136894432,
     "asserteeUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
-    "runId": "undertow-1786121180691",
+    "runId": "undertow-1786136894432",
     "partitionSpec": {
       "partition": "FULL_TABLE_SNAPSHOT",
       "type": "FULL_TABLE"

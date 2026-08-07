@@ -1,0 +1,21 @@
+🟡 WARN — fraud_detector_v3 (0 blocking, 3 warning)
+
+┌─────────────────────────────────────── WARNING ───────────────────────────────────────┐
+│ Feature `transaction_velocity_7d` — Mean of `amount` moved 125.5 → 342.1 (+4.8σ) in   │
+│ staging.transactions_clean                                                            │
+│   origin: staging.transactions_clean.amount (2 hops)                                  │
+│   Confidence: PROBABLE (mean shift)                                                   │
+│                                                                                       │
+│ Feature `transaction_velocity_7d` — Null rate on `amount` rose 0.0% → 18.0% (+18.0pp) │
+│ in staging.transactions_clean                                                         │
+│   origin: staging.transactions_clean.amount (2 hops)                                  │
+│   Confidence: PROBABLE (null rate jump)                                               │
+│                                                                                       │
+│ Feature `transaction_velocity_7d` — `amount` left its baseline range in               │
+│ staging.transactions_clean: max 5000 → 18400                                          │
+│   origin: staging.transactions_clean.amount (2 hops)                                  │
+│   Confidence: PROBABLE (range violation)                                              │
+│                                                                                       │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+
+  statistics: Compared statistics on 3/14 columns across 3/6 assets.

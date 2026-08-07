@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.tree import Tree
 
+from undertow.differ import ProfileCoverage
 from undertow.models import Severity, Verdict, short_urn
 
 
@@ -17,8 +18,16 @@ def render_console(
     *,
     console: Console | None = None,
     written_to_datahub: bool = False,
+    coverage: ProfileCoverage | None = None,
 ) -> None:
-    """Render structured Rich output for a Verdict to the console."""
+    """Render structured Rich output for a Verdict to the console.
+
+    `coverage` states how much of the footprint the statistical differ could
+    actually inspect. It matters most on the verdicts that look like good news:
+    "no drift found" across assets that were never profiled is a much weaker
+    claim than the same words across assets that were, and a report that renders
+    them identically is quietly misleading.
+    """
     con = console or Console()
 
     # Severity emoji & header with encoding fallback
@@ -147,13 +156,27 @@ def render_console(
         )
         con.print()
 
+    if coverage is not None:
+        # Dim, and last: it qualifies the verdict rather than competing with it.
+        # Blind coverage is promoted to yellow — a CLEAR that inspected nothing
+        # is the one case where the qualifier matters more than the verdict.
+        style = "yellow" if coverage.is_blind else "dim"
+        con.print(f"  statistics: {coverage.summary()}", style=style)
+
     if written_to_datahub:
         con.print(f"✍ Written to DataHub → {model_name}")
 
 
-def format_console(verdict: Verdict, *, written_to_datahub: bool = False) -> str:
+def format_console(
+    verdict: Verdict,
+    *,
+    written_to_datahub: bool = False,
+    coverage: ProfileCoverage | None = None,
+) -> str:
     """Format Verdict console Rich output as a string."""
     buf = io.StringIO()
     con = Console(file=buf, force_terminal=False, width=80)
-    render_console(verdict, console=con, written_to_datahub=written_to_datahub)
+    render_console(
+        verdict, console=con, written_to_datahub=written_to_datahub, coverage=coverage
+    )
     return buf.getvalue()
