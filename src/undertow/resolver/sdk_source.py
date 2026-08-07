@@ -31,12 +31,20 @@ class SdkLineageSource(LineageSource):
     ) -> None:
         self.gms_url = gms_url
         self.token = token
+        # Why this is recorded rather than swallowed: a gate that cannot reach the
+        # graph must fail closed. If construction quietly left `graph = None`, every
+        # lineage call returns [], the footprint collapses to the model itself, and
+        # the verdict comes back CLEAR — a green light produced by a blind check.
+        self.connection_error: str | None = None
         if graph is None:
             try:
                 from datahub.ingestion.graph.client import DataHubGraph, DataHubGraphConfig
-                self.graph = DataHubGraph(DataHubGraphConfig(server=gms_url, token=token, timeout_sec=2))
-            except Exception:
+                self.graph = DataHubGraph(
+                    DataHubGraphConfig(server=gms_url, token=token, timeout_sec=10)
+                )
+            except Exception as exc:
                 self.graph = None
+                self.connection_error = f"{type(exc).__name__}: {exc}"
         else:
             self.graph = graph
 
@@ -67,23 +75,56 @@ class SdkLineageSource(LineageSource):
     def get_lineage(
         self, urn: str, direction: str = "UPSTREAM", hops: int = 1
     ) -> list[LineageEdge]:
-        if self.graph is not None:
-            try:
-                edges_raw = self.graph.get_lineage(urn, direction=direction, depth=hops)
-                edges: list[LineageEdge] = []
-                for edge in edges_raw:
-                    edges.append(
-                        LineageEdge(
-                            source_urn=getattr(edge, "urn", urn),
-                            target_urn=getattr(edge, "target_urn", ""),
-                            relationship=getattr(edge, "type", "DownstreamOf"),
-                            via=getattr(edge, "via", None),
-                        )
-                    )
-                return edges
-            except Exception:
-                pass
-        return []
+        """One hop of lineage, via the graph client's `scroll_lineage` endpoint.
+
+        The previous implementation called `DataHubGraph.get_lineage`, which does
+        not exist on this client — the call raised `AttributeError` on every
+        invocation and a bare `except: pass` turned that into an empty list. The
+        effect was that dataset-to-dataset lineage never resolved at all, so a
+        multi-hop upstream chain looked identical to a clean one.
+
+        `scroll_lineage` applies the entity registry's triplet filter, so only
+        edges annotated as lineage come back — the same `isLineage` semantics the
+        MCP server uses, which is what keeps the two sources agreeing.
+        """
+        if self.graph is None:
+            raise RuntimeError(
+                f"No DataHub graph client available to resolve lineage for {urn}. "
+                f"{self.connection_error or 'Client was not initialised.'}"
+            )
+
+        from datahub.ingestion.graph.openapi import LineageDirection
+
+        wanted = (
+            LineageDirection.DOWNSTREAM
+            if direction.upper() == "DOWNSTREAM"
+            else LineageDirection.UPSTREAM
+        )
+
+        try:
+            result = self.graph.scroll_lineage(urns=[urn], direction=wanted, count=100)
+        except Exception as exc:
+            # Raised, not swallowed: an empty edge list is read downstream as
+            # "nothing upstream changed" and reported as CLEAR.
+            raise RuntimeError(
+                f"Lineage query failed for {urn}: {type(exc).__name__}: {exc}"
+            ) from exc
+
+        edges: list[LineageEdge] = []
+        for rel in getattr(result, "relationships", None) or []:
+            # Endpoints arrive pre-resolved into upstream/downstream, so the
+            # neighbour is simply whichever end is not the anchor.
+            neighbour = rel.upstream_urn if rel.downstream_urn == urn else rel.downstream_urn
+            if not neighbour or neighbour == urn:
+                continue
+            edges.append(
+                LineageEdge(
+                    source_urn=urn,
+                    target_urn=neighbour,
+                    relationship=rel.relationship_type or "DownstreamOf",
+                )
+            )
+        return edges
 
     def list_schema_fields(self, urn: str) -> list[SchemaFieldInfo]:
         node = self.get_entity(urn)

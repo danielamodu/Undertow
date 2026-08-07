@@ -7,15 +7,25 @@ from undertow.resolver.base import (
     SchemaFieldInfo,
     parse_entity_type,
 )
+from undertow.resolver.mcp_client import (
+    DEFAULT_TIMEOUT_SEC,
+    OSS_TOOLS,
+    McpError,
+    McpToolExecutor,
+)
 from undertow.resolver.mcp_source import McpLineageSource
 from undertow.resolver.sdk_source import SdkLineageSource
 from undertow.resolver.traversal import resolve_footprint
 
 __all__ = [
+    "DEFAULT_TIMEOUT_SEC",
+    "OSS_TOOLS",
     "LineageEdge",
     "LineageNode",
     "LineageSource",
+    "McpError",
     "McpLineageSource",
+    "McpToolExecutor",
     "SchemaFieldInfo",
     "SdkLineageSource",
     "parse_entity_type",

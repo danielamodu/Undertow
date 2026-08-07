@@ -174,34 +174,43 @@ def _fetch_entity(
 def _find_upstreams(
     node: LineageNode | None, urn: str, entity_type: str, source: LineageSource
 ) -> list[tuple[str, str]]:
-    """Determine upstream edges for an entity."""
+    """Determine upstream edges for an entity.
+
+    Every hop goes through `get_lineage`, including `mlModel -> mlFeature` and
+    `mlFeature -> dataset`. Two reasons this is the only workable shape:
+
+    1. **The ML edges are not readable off the entity over MCP.** DataHub's MCP
+       server selects name/description/ownership/tags/deprecation/structured
+       properties for `MLModel` and `MLFeature` — there is no `mlFeatures` and no
+       `sources` field to read. An aspect-based walk resolves zero features there.
+
+    2. **The lineage registry already models them.** `Consumes` and `DerivedFrom`
+       are annotated as lineage edges, so both backends return them from a plain
+       lineage query, with the relationship name attached. Asking the graph what
+       it is connected to beats reconstructing it from two different aspect
+       spellings per backend.
+
+    `mlFeatureTable` is filtered by the caller: its `Contains` edge is not
+    flagged `isLineage`, so it should never appear here — but it is excluded
+    explicitly rather than assumed absent.
+    """
+    edges = source.get_lineage(urn, direction="UPSTREAM", hops=1)
+
     results: list[tuple[str, str]] = []
-
-    if entity_type == "mlModel":
-        if node and "mlModelProperties" in node.aspects:
-            props = node.aspects["mlModelProperties"]
-            features = getattr(props, "mlFeatures", None) or _get_dict_or_attr(props, "mlFeatures") or []
-            for f in features:
-                f_urn = str(f)
-                results.append((f_urn, "Consumes"))
-
-    elif entity_type == "mlFeature":
-        if node and "mlFeatureProperties" in node.aspects:
-            props = node.aspects["mlFeatureProperties"]
-            sources = getattr(props, "sources", None) or _get_dict_or_attr(props, "sources") or []
-            for s in sources:
-                s_urn = str(s)
-                results.append((s_urn, "DerivedFrom"))
-
-    elif entity_type == "dataset":
-        lineage_edges = source.get_lineage(urn, direction="UPSTREAM", hops=1)
-        for edge in lineage_edges:
-            target = edge.target_urn if edge.source_urn == urn else edge.source_urn
-            if target and target != urn:
-                rel = edge.relationship or "DownstreamOf"
-                results.append((target, rel))
-
+    for edge in edges:
+        target = edge.target_urn if edge.source_urn == urn else edge.source_urn
+        if target and target != urn:
+            results.append((target, edge.relationship or _default_relationship(entity_type)))
     return results
+
+
+def _default_relationship(entity_type: str) -> str:
+    """Fallback edge label when a backend omits the relationship type."""
+    return {
+        "mlModel": "Consumes",
+        "mlFeature": "DerivedFrom",
+        "mlPrimaryKey": "DerivedFrom",
+    }.get(entity_type, "DownstreamOf")
 
 
 def _build_attribution_hops(
@@ -255,63 +264,54 @@ def _build_asset_snapshot(
 
         if not columns and "schemaMetadata" in aspects:
             sm = aspects["schemaMetadata"]
-            raw_fields = getattr(sm, "fields", None) or _get_dict_or_attr(sm, "fields") or []
-            for f in raw_fields:
-                path = getattr(f, "fieldPath", None) or _get_dict_or_attr(f, "fieldPath") or ""
-                dtype = getattr(f, "dataType", None) or _get_dict_or_attr(f, "dataType") or "unknown"
-                native = getattr(f, "nativeDataType", None) or _get_dict_or_attr(f, "nativeDataType")
-                nullable = getattr(f, "nullable", False) or _get_dict_or_attr(f, "nullable") or False
+            for f in _field(sm, "fields") or []:
                 columns.append(
                     ColumnSnapshot(
-                        path=path,
-                        data_type=str(dtype),
-                        native_type=native,
-                        nullable=nullable,
+                        path=_field(f, "fieldPath") or "",
+                        data_type=str(_field(f, "dataType") or "unknown"),
+                        native_type=_field(f, "nativeDataType"),
+                        nullable=bool(_field(f, "nullable") or False),
                     )
                 )
 
         if "datasetProfile" in aspects:
             dp = aspects["datasetProfile"]
-            row_count = getattr(dp, "rowCount", None) or _get_dict_or_attr(dp, "rowCount")
-            col_count = getattr(dp, "columnCount", None) or _get_dict_or_attr(dp, "columnCount")
-            raw_fps = getattr(dp, "fieldProfiles", None) or _get_dict_or_attr(dp, "fieldProfiles") or []
             fps: list[FieldProfileSnapshot] = []
-            for fp in raw_fps:
-                path = getattr(fp, "fieldPath", None) or _get_dict_or_attr(fp, "fieldPath") or ""
+            for fp in _field(dp, "fieldProfiles") or []:
                 fps.append(
                     FieldProfileSnapshot(
-                        path=path,
-                        null_count=getattr(fp, "nullCount", None) or _get_dict_or_attr(fp, "nullCount"),
-                        null_proportion=getattr(fp, "nullProportion", None) or _get_dict_or_attr(fp, "nullProportion"),
-                        unique_count=getattr(fp, "uniqueCount", None) or _get_dict_or_attr(fp, "uniqueCount"),
-                        unique_proportion=getattr(fp, "uniqueProportion", None) or _get_dict_or_attr(fp, "uniqueProportion"),
-                        min=str(getattr(fp, "min", None) or _get_dict_or_attr(fp, "min")) if getattr(fp, "min", None) or _get_dict_or_attr(fp, "min") else None,
-                        max=str(getattr(fp, "max", None) or _get_dict_or_attr(fp, "max")) if getattr(fp, "max", None) or _get_dict_or_attr(fp, "max") else None,
-                        mean=str(getattr(fp, "mean", None) or _get_dict_or_attr(fp, "mean")) if getattr(fp, "mean", None) or _get_dict_or_attr(fp, "mean") else None,
-                        median=str(getattr(fp, "median", None) or _get_dict_or_attr(fp, "median")) if getattr(fp, "median", None) or _get_dict_or_attr(fp, "median") else None,
-                        stdev=str(getattr(fp, "stdev", None) or _get_dict_or_attr(fp, "stdev")) if getattr(fp, "stdev", None) or _get_dict_or_attr(fp, "stdev") else None,
+                        path=_field(fp, "fieldPath") or "",
+                        null_count=_field(fp, "nullCount"),
+                        null_proportion=_field(fp, "nullProportion"),
+                        unique_count=_field(fp, "uniqueCount"),
+                        unique_proportion=_field(fp, "uniqueProportion"),
+                        min=_as_str(_field(fp, "min")),
+                        max=_as_str(_field(fp, "max")),
+                        mean=_as_str(_field(fp, "mean")),
+                        median=_as_str(_field(fp, "median")),
+                        stdev=_as_str(_field(fp, "stdev")),
                     )
                 )
-            profile = ProfileSnapshot(row_count=row_count, column_count=col_count, fields=tuple(fps))
+            profile = ProfileSnapshot(
+                row_count=_field(dp, "rowCount"),
+                column_count=_field(dp, "columnCount"),
+                fields=tuple(fps),
+            )
 
         if "globalTags" in aspects:
-            gt = aspects["globalTags"]
-            tag_list = getattr(gt, "tags", None) or _get_dict_or_attr(gt, "tags") or []
-            for t in tag_list:
-                tag_urn = getattr(t, "tag", None) or _get_dict_or_attr(t, "tag") or str(t)
-                tags.append(str(tag_urn))
+            for t in _field(aspects["globalTags"], "tags") or []:
+                tag_urn = _field(t, "tag")
+                tags.append(str(tag_urn if tag_urn is not None else t))
 
         if "ownership" in aspects:
-            ow = aspects["ownership"]
-            owner_list = getattr(ow, "owners", None) or _get_dict_or_attr(ow, "owners") or []
-            for o in owner_list:
-                owner_urn = getattr(o, "owner", None) or _get_dict_or_attr(o, "owner") or str(o)
-                owners.append(str(owner_urn))
+            for o in _field(aspects["ownership"], "owners") or []:
+                owner_urn = _field(o, "owner")
+                owners.append(str(owner_urn if owner_urn is not None else o))
 
         if "deprecation" in aspects:
             dep = aspects["deprecation"]
-            deprecated = bool(getattr(dep, "deprecated", False) or _get_dict_or_attr(dep, "deprecated") or False)
-            note = getattr(dep, "note", None) or _get_dict_or_attr(dep, "note")
+            deprecated = bool(_field(dep, "deprecated") or False)
+            note = _field(dep, "note")
 
     return AssetSnapshot(
         urn=urn,
@@ -325,10 +325,33 @@ def _build_asset_snapshot(
     )
 
 
-def _get_dict_or_attr(obj: Any, key: str) -> Any:
+def _field(obj: Any, key: str) -> Any:
+    """Read `key` off a dict or an object, returning None only when truly absent.
+
+    This replaces a `getattr(x, k, None) or _field(x, k)` idiom that was applied
+    to every profile statistic. The `or` collapsed legitimate falsy values —
+    `rowCount=0`, `nullCount=0`, `min="0"` — into None, which the differ reads as
+    *cannot assess*. Those are exactly the boundary values a drift check cares
+    about, so the bug silently blinded the statistical differ where it mattered
+    most.
+    """
     if isinstance(obj, dict):
         return obj.get(key)
     return getattr(obj, key, None)
+
+
+def _as_str(value: Any) -> str | None:
+    """Stringify a profile statistic, preserving zero.
+
+    DataHub types min/max/mean/median/stdev as strings so non-numeric columns fit
+    the same shape. `str(0)` is "0"; `0 if 0 else None` is None.
+    """
+    return None if value is None else str(value)
+
+
+# Retained under the old name: `_get_dict_or_attr` is referenced by
+# `_extract_baseline_snapshot` above and by tests.
+_get_dict_or_attr = _field
 
 
 __all__ = ["resolve_footprint"]
