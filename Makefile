@@ -54,7 +54,7 @@ test:
 	pytest contrib/datahub-mlmodel-patch-builder/ -q
 
 lint:
-	ruff check src/ tests/
+	ruff check src/ tests/ scripts/
 	mypy src/
 
 .PHONY: install quickstart seed baseline break reset check check-churn check-write \

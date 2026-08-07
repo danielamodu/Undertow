@@ -47,6 +47,7 @@ transactions.raw                                   (@data_eng_tom)
 ```
 
 - **Lineage Traversal**: Resolves the full upstream footprint of an `mlModel` across ML relationships (`mlModel --Consumes--> mlFeature --DerivedFrom--> dataset`) *and* multi-hop dataset lineage, so a change in a raw table is still found through the staging layer that sits between it and the feature.
+- **The fixture's lineage is parsed from SQL, not hand-written.** `staging.transactions_clean` is defined by [one SQL file](scripts/sql/staging_transactions_clean.sql), and both its schema and its column-level lineage are produced by running DataHub's own parser over it — the same `sqlglot_lineage` the Snowflake and BigQuery connectors use. The `transaction_amount → amount` edge the demo turns on exists because `CAST(transaction_amount AS DECIMAL(10, 2)) AS amount` was parsed, not because someone typed the edge in to make the demo work.
 - **Blast Radius**: One dropped column reaches every model downstream of it, not just the one you happened to be deploying. Above, a single change to `transactions.raw` blocks two models owned by two teams who have never spoken.
 - **Multi-Aspect Drift Detection**: Compares live graph metadata against an approved baseline for schema changes, governance shifts, and statistical drift.
 - **Root-Cause Attribution**: Walks findings back to root-cause assets and resolves technical owners so the right engineer is named on the failure.
@@ -166,7 +167,7 @@ make reset
 
 | Command | What it does |
 |---|---|
-| `make seed` | Build the fixture graph: datasets, staging layer, features, two models, model group, deployment |
+| `make seed` | Build the fixture graph: source tables, SQL-parsed staging layer, features, two models, model group, deployment |
 | `make baseline` | Capture the approved state of both models |
 | `make break` | Drop `transaction_amount` from `transactions.raw` |
 | `make check` | Gate the fraud model |

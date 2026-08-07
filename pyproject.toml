@@ -49,6 +49,10 @@ dev = [
     "mcp>=1.0,<2",
     "mcp-server-datahub>=0.6,<1",
     "anthropic>=0.40,<1",
+    # `make seed` derives the fixture's lineage by running DataHub's SQL parser
+    # over scripts/sql/. That parser needs sqlglot, which ships in this extra
+    # rather than the base package. Undertow itself never imports it.
+    "acryl-datahub[sql-parser]>=1.4.0,<2",
     "pytest>=8.0,<9",
     "pytest-cov>=5.0,<6",
     "ruff>=0.6,<1",

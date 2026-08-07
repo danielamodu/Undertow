@@ -18,7 +18,32 @@ make check-write     # -> verdict-block.txt, github-pr-comment.md, and the aspec
 ## The fixture
 
 `make seed` builds a three-hop chain with column-level lineage, ending in **two
-models owned by two different teams**:
+models owned by two different teams**.
+
+The middle hop is not hand-written. `staging.transactions_clean` is defined by
+[`scripts/sql/staging_transactions_clean.sql`](../scripts/sql/staging_transactions_clean.sql),
+and the seed script runs DataHub's own SQL parser — `sqlglot_lineage`, the one
+the Snowflake and BigQuery connectors use — to derive both the table's schema and
+its column-level lineage from that statement:
+
+```sql
+SELECT
+    transaction_id,
+    customer_id,
+    CAST(transaction_amount AS DECIMAL(10, 2)) AS amount,
+    CAST(timestamp AS DATE)                    AS event_date
+FROM transactions.raw
+WHERE transaction_amount IS NOT NULL
+```
+
+Four column edges come out of that, `IDENTITY` and `TRANSFORMED` distinguished by
+the parser rather than labelled by hand, at confidence `0.9`. The statement is
+emitted as a `query` entity and every fine-grained edge points back at it, so the
+SQL behind a lineage edge is readable in the catalog.
+
+This matters for reading the verdicts below. `transaction_amount → amount` — the
+edge the entire demo turns on — exists because the parser found it in a `CAST`,
+not because it was typed in to make the demo work.
 
 ```
 transactions.raw                                   (@data_eng_tom)

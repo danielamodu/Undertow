@@ -28,6 +28,9 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 SRC = ROOT / "src"
+# `make seed`, `make break`, `make reset` are documented commands, so their
+# imports have to be installable by the documented install too.
+SCRIPTS = ROOT / "scripts"
 
 # The command the README tells a reviewer to run. If that changes, change this,
 # and think hard about what the new one leaves out.
@@ -40,24 +43,35 @@ DISTRIBUTION_OF = {
     "datahub": "acryl-datahub",
     "yaml": "pyyaml",
     "jinja2": "jinja2",
+    # Pulled in by `acryl-datahub[sql-parser]`, which the seed script needs to
+    # parse scripts/sql/. It is never imported by name here, only through
+    # `datahub.sql_parsing`, so it maps onto the distribution that supplies it.
+    "sqlglot": "acryl-datahub",
 }
 
 # Never imported — launched as `python -m mcp_server_datahub` — so no amount of
 # scanning import statements will find it. That is precisely how it went missing.
 LAUNCHED_NOT_IMPORTED = {"mcp-server-datahub"}
 
-FIRST_PARTY = {"undertow"}
+def first_party() -> set[str]:
+    """The package, plus every script module, since scripts import each other.
+
+    `reset_demo.py` does `from seed_datahub import main` after putting its own
+    directory on the path — a sibling import, not a distribution.
+    """
+    return {"undertow", *(p.stem for p in SCRIPTS.glob("*.py"))}
 
 
-def third_party_imports() -> dict[str, set[str]]:
-    """Every non-stdlib, non-first-party module imported under `src/`.
+def third_party_imports(*roots: Path) -> dict[str, set[str]]:
+    """Every non-stdlib, non-first-party module imported under `roots`.
 
     Derived by walking the AST rather than kept as a hand-maintained list: the
     original bug was a dependency nobody remembered to write down, and a list
     that has to be remembered would have exactly the same failure mode.
     """
+    local = first_party()
     found: dict[str, set[str]] = {}
-    for path in SRC.rglob("*.py"):
+    for path in (p for root in roots for p in root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -68,7 +82,7 @@ def third_party_imports() -> dict[str, set[str]]:
                 continue
             for name in names:
                 root = name.split(".")[0]
-                if not root or root in sys.stdlib_module_names or root in FIRST_PARTY:
+                if not root or root in sys.stdlib_module_names or root in local:
                     continue
                 found.setdefault(
                     DISTRIBUTION_OF.get(root, root), set()
@@ -109,7 +123,7 @@ def test_documented_install_provides_every_import_the_code_makes(
         project["optional-dependencies"][DOCUMENTED_INSTALL_EXTRA]
     )
 
-    imported = third_party_imports()
+    imported = third_party_imports(SRC, SCRIPTS)
     required = set(imported) | LAUNCHED_NOT_IMPORTED
     missing = required - declared
 

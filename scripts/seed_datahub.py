@@ -1,7 +1,20 @@
-"""Seed DataHub with a realistic ML lineage graph and baseline snapshot."""
+"""Seed DataHub with a realistic ML lineage graph and baseline snapshot.
 
-import json
+Derived tables are not described here. `scripts/sql/` holds the SQL that builds
+them, and DataHub's own SQL parser — `sqlglot_lineage`, the one the Snowflake
+and BigQuery connectors run in production — produces both the output schema and
+the column-level lineage from those statements.
+
+That distinction is the point. A fixture whose lineage is hand-asserted proves
+only that Undertow can read aspects someone wrote by hand to make the demo work.
+A fixture whose lineage is parsed out of `CAST(transaction_amount AS ...) AS
+amount` proves the column-level path Undertow attributes a failure along is the
+one the SQL actually creates. Only source tables are declared directly, because
+in a real catalog those arrive from the source system rather than from a query.
+"""
+
 import os
+import pathlib
 import sys
 import time
 
@@ -9,6 +22,12 @@ import datahub.emitter.mce_builder as builder
 import datahub.metadata.schema_classes as models
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.emitter.rest_emitter import DatahubRestEmitter
+from datahub.sql_parsing.schema_resolver import SchemaResolver
+from datahub.sql_parsing.sqlglot_lineage import (
+    SqlParsingResult,
+    infer_output_schema,
+    sqlglot_lineage,
+)
 
 from undertow.models import (
     AssetSnapshot,
@@ -18,6 +37,10 @@ from undertow.models import (
     UndertowSnapshot,
 )
 from undertow.reporter.datahub_writer import MLModelPatchBuilder
+
+SQL_DIR = pathlib.Path(__file__).parent / "sql"
+PLATFORM = "snowflake"
+ENV = "PROD"
 
 GMS_URL = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080")
 TOKEN = os.environ.get("DATAHUB_GMS_TOKEN")
@@ -71,56 +94,106 @@ def ensure_structured_property_def(emitter: DatahubRestEmitter) -> None:
     )
 
 
-def seed_datasets(emitter: DatahubRestEmitter) -> None:
-    print("Emitting upstream datasets...")
+# Source tables. These are declared rather than parsed because that is how they
+# arrive in a real catalog: an ingestion run reads them out of the warehouse.
+# Everything downstream of here is derived from SQL instead.
+TXN_FIELDS = [
+    models.SchemaFieldClass(
+        fieldPath="transaction_id",
+        type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+        nativeDataType="VARCHAR(64)",
+        nullable=False,
+        description="Unique transaction ID",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="customer_id",
+        type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+        nativeDataType="VARCHAR(64)",
+        nullable=False,
+        description="Customer ID",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="transaction_amount",
+        type=models.SchemaFieldDataTypeClass(type=models.NumberTypeClass()),
+        nativeDataType="DECIMAL(10,2)",
+        nullable=False,
+        description="Transaction amount in USD",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="merchant_id",
+        type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+        nativeDataType="VARCHAR(64)",
+        nullable=True,
+        description="Merchant ID",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="timestamp",
+        type=models.SchemaFieldDataTypeClass(type=models.TimeTypeClass()),
+        nativeDataType="TIMESTAMP_NTZ",
+        nullable=False,
+        description="Transaction timestamp",
+    ),
+]
 
-    # 1. transactions.raw (5 columns)
-    schema_txn = models.SchemaMetadataClass(
-        schemaName="transactions.raw",
-        platform=builder.make_data_platform_urn("snowflake"),
+
+CUST_FIELDS = [
+    models.SchemaFieldClass(
+        fieldPath="customer_id",
+        type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+        nativeDataType="VARCHAR(64)",
+        nullable=False,
+        description="Customer ID",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="signup_date",
+        type=models.SchemaFieldDataTypeClass(type=models.DateTypeClass()),
+        nativeDataType="DATE",
+        nullable=False,
+        description="Customer signup date",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="credit_score",
+        type=models.SchemaFieldDataTypeClass(type=models.NumberTypeClass()),
+        nativeDataType="INT",
+        nullable=True,
+        description="Credit score",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="country_code",
+        type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+        nativeDataType="VARCHAR(2)",
+        nullable=True,
+        description="ISO Country code",
+    ),
+    models.SchemaFieldClass(
+        fieldPath="risk_level",
+        type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+        nativeDataType="VARCHAR(16)",
+        nullable=True,
+        description="Evaluated risk level",
+    ),
+]
+
+
+def make_schema(name: str, fields: list) -> models.SchemaMetadataClass:
+    return models.SchemaMetadataClass(
+        schemaName=name,
+        platform=builder.make_data_platform_urn(PLATFORM),
         version=0,
         hash="",
         platformSchema=models.OtherSchemaClass(rawSchema=""),
-        fields=[
-            models.SchemaFieldClass(
-                fieldPath="transaction_id",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(64)",
-                nullable=False,
-                description="Unique transaction ID",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="customer_id",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(64)",
-                nullable=False,
-                description="Customer ID",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="transaction_amount",
-                type=models.SchemaFieldDataTypeClass(type=models.NumberTypeClass()),
-                nativeDataType="DECIMAL(10,2)",
-                nullable=False,
-                description="Transaction amount in USD",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="merchant_id",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(64)",
-                nullable=True,
-                description="Merchant ID",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="timestamp",
-                type=models.SchemaFieldDataTypeClass(type=models.TimeTypeClass()),
-                nativeDataType="TIMESTAMP_NTZ",
-                nullable=False,
-                description="Transaction timestamp",
-            ),
-        ],
+        fields=fields,
     )
+
+
+def seed_datasets(emitter: DatahubRestEmitter) -> None:
+    print("Emitting source datasets...")
+
+    # 1. transactions.raw (5 columns)
     emitter.emit_mcp(
-        MetadataChangeProposalWrapper(entityUrn=DS_TXN_URN, aspect=schema_txn)
+        MetadataChangeProposalWrapper(
+            entityUrn=DS_TXN_URN, aspect=make_schema("transactions.raw", TXN_FIELDS)
+        )
     )
 
     profile_txn = models.DatasetProfileClass(
@@ -144,52 +217,10 @@ def seed_datasets(emitter: DatahubRestEmitter) -> None:
     )
 
     # 2. customers.raw (5 columns)
-    schema_cust = models.SchemaMetadataClass(
-        schemaName="customers.raw",
-        platform=builder.make_data_platform_urn("snowflake"),
-        version=0,
-        hash="",
-        platformSchema=models.OtherSchemaClass(rawSchema=""),
-        fields=[
-            models.SchemaFieldClass(
-                fieldPath="customer_id",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(64)",
-                nullable=False,
-                description="Customer ID",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="signup_date",
-                type=models.SchemaFieldDataTypeClass(type=models.DateTypeClass()),
-                nativeDataType="DATE",
-                nullable=False,
-                description="Customer signup date",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="credit_score",
-                type=models.SchemaFieldDataTypeClass(type=models.NumberTypeClass()),
-                nativeDataType="INT",
-                nullable=True,
-                description="Credit score",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="country_code",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(2)",
-                nullable=True,
-                description="ISO Country code",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="risk_level",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(16)",
-                nullable=True,
-                description="Evaluated risk level",
-            ),
-        ],
-    )
     emitter.emit_mcp(
-        MetadataChangeProposalWrapper(entityUrn=DS_CUST_URN, aspect=schema_cust)
+        MetadataChangeProposalWrapper(
+            entityUrn=DS_CUST_URN, aspect=make_schema("customers.raw", CUST_FIELDS)
+        )
     )
 
     profile_cust = models.DatasetProfileClass(
@@ -213,111 +244,231 @@ def seed_datasets(emitter: DatahubRestEmitter) -> None:
     )
 
 
-def seed_staging(emitter: DatahubRestEmitter) -> None:
-    """Emit the staging table and the raw -> staging lineage edge.
+def source_schemas() -> dict[str, models.SchemaMetadataClass]:
+    """The schemas the parser can bind columns against, keyed by URN.
 
-    Both levels are emitted: table-level `upstreams` so the traversal has an edge
-    to walk, and `fineGrainedLineages` mapping
-    `transactions.raw.transaction_amount -> staging.transactions_clean.amount`
-    so the attribution can name the column rather than the table. The column-level
-    map is the difference between "something upstream changed" and "this column,
-    this path, this owner".
+    Without schemas the parser still finds table-level lineage, but `SELECT *`
+    and unqualified columns cannot be attributed to a source table — and
+    column-level attribution is the entire product. Reusing the same field lists
+    that get emitted keeps the parse grounded in the catalog rather than in a
+    second, drifting description of it.
     """
-    print("Emitting staging layer and column-level lineage...")
+    return {
+        DS_TXN_URN: make_schema("transactions.raw", TXN_FIELDS),
+        DS_CUST_URN: make_schema("customers.raw", CUST_FIELDS),
+    }
 
-    schema_staging = models.SchemaMetadataClass(
-        schemaName="staging.transactions_clean",
-        platform=builder.make_data_platform_urn("snowflake"),
-        version=0,
-        hash="",
-        platformSchema=models.OtherSchemaClass(rawSchema=""),
-        fields=[
-            models.SchemaFieldClass(
-                fieldPath="transaction_id",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(64)",
-                nullable=False,
-                description="Unique transaction ID",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="customer_id",
-                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
-                nativeDataType="VARCHAR(64)",
-                nullable=False,
-                description="Customer ID",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="amount",
-                type=models.SchemaFieldDataTypeClass(type=models.NumberTypeClass()),
-                nativeDataType="DECIMAL(10,2)",
-                nullable=False,
-                description="Cleaned transaction amount, derived from transactions.raw.transaction_amount",
-            ),
-            models.SchemaFieldClass(
-                fieldPath="event_date",
-                type=models.SchemaFieldDataTypeClass(type=models.DateTypeClass()),
-                nativeDataType="DATE",
-                nullable=False,
-                description="Transaction date",
-            ),
-        ],
-    )
-    emitter.emit_mcp(
-        MetadataChangeProposalWrapper(entityUrn=DS_STAGING_URN, aspect=schema_staging)
-    )
 
+def make_resolver(schemas: dict[str, models.SchemaMetadataClass]) -> SchemaResolver:
+    """A fresh resolver over `schemas`.
+
+    Fresh, not mutated in place. `sqlglot_lineage` memoises on the resolver
+    object, so adding a schema to one already used for a parse yields a cache
+    hit and the previous, less-informed answer — silently, with no error and a
+    confidence score that never improves.
+    """
+    resolver = SchemaResolver(platform=PLATFORM, env=ENV)
+    for urn, schema in schemas.items():
+        resolver.add_schema_metadata(urn, schema)
+    return resolver
+
+
+def parse_transform(
+    sql_file: str, schemas: dict[str, models.SchemaMetadataClass]
+) -> tuple[str, SqlParsingResult]:
+    """Run DataHub's SQL parser over one transform. Fails loudly.
+
+    Parsed twice on purpose. The first pass knows the source schemas but not the
+    table the statement creates, and the parser discounts its own confidence
+    accordingly — 0.35 here. Feeding the inferred output schema back in and
+    re-parsing gives it both ends of the mapping, and takes the same four column
+    edges to 0.9.
+
+    A production connector gets this for free: the output table was ingested
+    before its queries were parsed. A fixture that builds the table from the
+    query has to close the loop itself, and the alternative is publishing
+    column-level lineage the parser openly says it is unsure about.
+
+    `schemas` is mutated with the inferred output schema, so a later transform
+    reading this table parses against it too.
+    """
+    sql = (SQL_DIR / sql_file).read_text(encoding="utf-8")
+
+    def parse() -> SqlParsingResult:
+        result = sqlglot_lineage(sql, schema_resolver=make_resolver(schemas))
+        if result.debug_info.error:
+            raise RuntimeError(f"{sql_file}: SQL parse failed — {result.debug_info.error}")
+        if not result.out_tables:
+            raise RuntimeError(f"{sql_file}: parsed no output table")
+        return result
+
+    first = parse()
+    out_urn = first.out_tables[0]
+    out_fields = infer_output_schema(first)
+    if out_fields:
+        schemas[out_urn] = make_schema(out_urn.split(",")[-2], out_fields)
+
+    result = parse()
+    if not result.column_lineage:
+        raise RuntimeError(
+            f"{sql_file}: parsed no column lineage. Table-level edges alone cannot "
+            "name a column, and naming the column is the point."
+        )
+    return sql, result
+
+
+def emit_transform(
+    emitter: DatahubRestEmitter, sql: str, result: SqlParsingResult, *, actor: str
+) -> str:
+    """Emit the schema, lineage, and query entity implied by one SQL statement.
+
+    Everything here comes out of the parse. Nothing about the output table's
+    columns, or which upstream column feeds which downstream one, is written
+    down a second time.
+    """
+    out_urn = result.out_tables[0]
     now_ms = int(time.time() * 1000)
-    audit = models.AuditStampClass(time=now_ms, actor=builder.make_user_urn("data_eng_tom"))
+    audit = models.AuditStampClass(time=now_ms, actor=builder.make_user_urn(actor))
 
-    upstream_lineage = models.UpstreamLineageClass(
-        upstreams=[
-            models.UpstreamClass(
-                dataset=DS_TXN_URN,
-                type=models.DatasetLineageTypeClass.TRANSFORMED,
-                auditStamp=audit,
-            )
-        ],
-        fineGrainedLineages=[
-            models.FineGrainedLineageClass(
-                upstreamType=models.FineGrainedLineageUpstreamTypeClass.FIELD_SET,
-                downstreamType=models.FineGrainedLineageDownstreamTypeClass.FIELD,
-                upstreams=[builder.make_schema_field_urn(DS_TXN_URN, "transaction_amount")],
-                downstreams=[builder.make_schema_field_urn(DS_STAGING_URN, "amount")],
-                transformOperation="CAST",
-                confidenceScore=1.0,
+    # The query entity, so the statement is inspectable in the catalog rather
+    # than only in this repository. Fine-grained edges point back at it.
+    query_urn = f"urn:li:query:undertow-{result.query_fingerprint}"
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(
+            entityUrn=query_urn,
+            aspect=models.QueryPropertiesClass(
+                statement=models.QueryStatementClass(
+                    value=sql, language=models.QueryLanguageClass.SQL
+                ),
+                source=models.QuerySourceClass.SYSTEM,
+                created=audit,
+                lastModified=audit,
             ),
-            models.FineGrainedLineageClass(
-                upstreamType=models.FineGrainedLineageUpstreamTypeClass.FIELD_SET,
-                downstreamType=models.FineGrainedLineageDownstreamTypeClass.FIELD,
-                upstreams=[builder.make_schema_field_urn(DS_TXN_URN, "customer_id")],
-                downstreams=[builder.make_schema_field_urn(DS_STAGING_URN, "customer_id")],
-                transformOperation="IDENTITY",
-                confidenceScore=1.0,
-            ),
-        ],
+        )
     )
     emitter.emit_mcp(
-        MetadataChangeProposalWrapper(entityUrn=DS_STAGING_URN, aspect=upstream_lineage)
+        MetadataChangeProposalWrapper(
+            entityUrn=query_urn,
+            aspect=models.QuerySubjectsClass(
+                subjects=[
+                    models.QuerySubjectClass(entity=urn)
+                    for urn in [out_urn, *result.in_tables]
+                ]
+            ),
+        )
     )
 
-    profile_staging = models.DatasetProfileClass(
-        timestampMillis=now_ms,
-        rowCount=10000,
-        columnCount=4,
-        fieldProfiles=[
-            models.DatasetFieldProfileClass(
-                fieldPath="amount",
-                nullCount=0,
-                nullProportion=0.0,
-                min="1.00",
-                max="5000.00",
-                mean="125.50",
-                stdev="45.20",
-            )
-        ],
-    )
+    # Output schema, inferred from the SELECT list and the source column types.
+    fields = infer_output_schema(result)
+    if not fields:
+        raise RuntimeError(f"could not infer an output schema for {out_urn}")
     emitter.emit_mcp(
-        MetadataChangeProposalWrapper(entityUrn=DS_STAGING_URN, aspect=profile_staging)
+        MetadataChangeProposalWrapper(
+            entityUrn=out_urn,
+            aspect=make_schema(out_urn.split(",")[-2], fields),
+        )
+    )
+
+    # Table-level edges give the traversal something to walk; the fine-grained
+    # edges let attribution name a column instead of a table.
+    fine_grained = [
+        models.FineGrainedLineageClass(
+            upstreamType=models.FineGrainedLineageUpstreamTypeClass.FIELD_SET,
+            downstreamType=models.FineGrainedLineageDownstreamTypeClass.FIELD,
+            upstreams=[
+                builder.make_schema_field_urn(up.table, up.column) for up in cl.upstreams
+            ],
+            downstreams=[builder.make_schema_field_urn(out_urn, cl.downstream.column)],
+            # Taken from the parse, not asserted: a column copied straight
+            # through is a different risk from one the SQL transforms.
+            transformOperation=(
+                "IDENTITY" if cl.logic and cl.logic.is_direct_copy else "TRANSFORMED"
+            ),
+            confidenceScore=result.debug_info.confidence,
+            query=query_urn,
+        )
+        for cl in (result.column_lineage or [])
+        if cl.upstreams
+    ]
+
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(
+            entityUrn=out_urn,
+            aspect=models.UpstreamLineageClass(
+                upstreams=[
+                    models.UpstreamClass(
+                        dataset=up_urn,
+                        type=models.DatasetLineageTypeClass.TRANSFORMED,
+                        auditStamp=audit,
+                        query=query_urn,
+                    )
+                    for up_urn in result.in_tables
+                ],
+                fineGrainedLineages=fine_grained,
+            ),
+        )
+    )
+
+    print(
+        f"  parsed {len(fine_grained)} column edges into {out_urn.split(',')[-2]} "
+        f"from {len(result.in_tables)} upstream table(s)"
+    )
+    return out_urn
+
+
+def seed_transforms(emitter: DatahubRestEmitter) -> dict[str, list]:
+    """Build every derived table by parsing the SQL that defines it.
+
+    Returns the inferred schema per derived table so the baseline can be built
+    from the same parse. Writing those columns out a second time by hand is how
+    a seeded baseline ends up disagreeing with the graph it was seeded from.
+    """
+    print("Parsing scripts/sql/ and emitting derived tables...")
+    schemas = source_schemas()
+
+    sql, result = parse_transform("staging_transactions_clean.sql", schemas)
+    out_urn = emit_transform(emitter, sql, result, actor="data_eng_tom")
+    if out_urn != DS_STAGING_URN:
+        raise RuntimeError(
+            f"SQL produced {out_urn}, but the fixture expects {DS_STAGING_URN}. "
+            "The demo's URNs and the SQL have drifted apart."
+        )
+
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(
+            entityUrn=DS_STAGING_URN,
+            aspect=models.DatasetProfileClass(
+                timestampMillis=int(time.time() * 1000),
+                rowCount=10000,
+                columnCount=4,
+                fieldProfiles=[
+                    models.DatasetFieldProfileClass(
+                        fieldPath="amount",
+                        nullCount=0,
+                        nullProportion=0.0,
+                        min="1.00",
+                        max="5000.00",
+                        mean="125.50",
+                        stdev="45.20",
+                    )
+                ],
+            ),
+        )
+    )
+
+    return {DS_STAGING_URN: infer_output_schema(result) or []}
+
+
+def to_column_snapshots(fields: list) -> tuple:
+    """SchemaFieldClass -> ColumnSnapshot, matching what the resolver captures."""
+    return tuple(
+        ColumnSnapshot(
+            path=f.fieldPath,
+            data_type=type(f.type.type).__name__ if f.type else "unknown",
+            native_type=f.nativeDataType,
+            nullable=bool(f.nullable),
+        )
+        for f in fields
     )
 
 
@@ -465,7 +616,7 @@ def seed_model(emitter: DatahubRestEmitter) -> None:
     )
 
 
-def seed_baseline(emitter: DatahubRestEmitter) -> None:
+def seed_baseline(emitter: DatahubRestEmitter, derived_fields: dict[str, list]) -> None:
     print("Emitting baseline snapshot to structured properties & local storage...")
 
     # Ensure property definition exists in DataHub
@@ -474,13 +625,7 @@ def seed_baseline(emitter: DatahubRestEmitter) -> None:
     ds_txn_asset = AssetSnapshot(
         urn=DS_TXN_URN,
         entity_type="dataset",
-        columns=(
-            ColumnSnapshot(path="transaction_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=False),
-            ColumnSnapshot(path="customer_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=False),
-            ColumnSnapshot(path="transaction_amount", data_type="NumberTypeClass", native_type="DECIMAL(10,2)", nullable=False),
-            ColumnSnapshot(path="merchant_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=True),
-            ColumnSnapshot(path="timestamp", data_type="TimeTypeClass", native_type="TIMESTAMP_NTZ", nullable=False),
-        ),
+        columns=to_column_snapshots(TXN_FIELDS),
         profile=ProfileSnapshot(
             row_count=10000,
             column_count=5,
@@ -501,12 +646,8 @@ def seed_baseline(emitter: DatahubRestEmitter) -> None:
     ds_staging_asset = AssetSnapshot(
         urn=DS_STAGING_URN,
         entity_type="dataset",
-        columns=(
-            ColumnSnapshot(path="transaction_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=False),
-            ColumnSnapshot(path="customer_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=False),
-            ColumnSnapshot(path="amount", data_type="NumberTypeClass", native_type="DECIMAL(10,2)", nullable=False),
-            ColumnSnapshot(path="event_date", data_type="DateTypeClass", native_type="DATE", nullable=False),
-        ),
+        # From the SQL parse, not restated here — see seed_transforms.
+        columns=to_column_snapshots(derived_fields[DS_STAGING_URN]),
         profile=ProfileSnapshot(
             row_count=10000,
             column_count=4,
@@ -529,13 +670,7 @@ def seed_baseline(emitter: DatahubRestEmitter) -> None:
     ds_cust_asset = AssetSnapshot(
         urn=DS_CUST_URN,
         entity_type="dataset",
-        columns=(
-            ColumnSnapshot(path="customer_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=False),
-            ColumnSnapshot(path="signup_date", data_type="DateTypeClass", native_type="DATE", nullable=False),
-            ColumnSnapshot(path="credit_score", data_type="NumberTypeClass", native_type="INT", nullable=True),
-            ColumnSnapshot(path="country_code", data_type="StringTypeClass", native_type="VARCHAR(2)", nullable=True),
-            ColumnSnapshot(path="risk_level", data_type="StringTypeClass", native_type="VARCHAR(16)", nullable=True),
-        ),
+        columns=to_column_snapshots(CUST_FIELDS),
         profile=ProfileSnapshot(
             row_count=5000,
             column_count=5,
@@ -611,15 +746,15 @@ def main() -> None:
     try:
         emitter = get_emitter()
         seed_datasets(emitter)
-        seed_staging(emitter)
+        derived_fields = seed_transforms(emitter)
         seed_dataset_ownership(emitter)
         seed_features(emitter)
         seed_model_group_and_deployment(emitter)
         seed_model(emitter)
-        seed_baseline(emitter)
+        seed_baseline(emitter, derived_fields)
         print("\nSuccessfully seeded DataHub graph.\n")
         print("  transactions.raw")
-        print("    └─ staging.transactions_clean")
+        print("    └─ staging.transactions_clean          [lineage parsed from SQL]")
         print("       ├─ transaction_velocity_7d  -> fraud_detector_v3   (@ml_eng_alex)")
         print("       └─ customer_txn_volume      -> churn_predictor_v1  (@ml_eng_priya)")
         print()
