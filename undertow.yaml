@@ -30,20 +30,19 @@ rules:
   MEAN_SHIFT: WARN
   RANGE_VIOLATION: WARN
   ROW_COUNT_CHANGE: WARN
-  DISTRIBUTION_SHIFT: WARN
 
 thresholds:
-  # Tier 1 — computed from DataHub's default profiling output. These fire on a
-  # stock instance with no profiler configuration.
+  # Computed from DataHub's default profiling output, so these fire on a stock
+  # instance with no profiler configuration.
+  #
+  # There is deliberately no PSI threshold here. PSI needs quantiles,
+  # histograms, or distinct value frequencies, all of which are `default=False`
+  # in DataHub's GE profiler config — so it could never fire on an unconfigured
+  # instance. See src/undertow/differ/statistical.py.
   null_rate_jump_pp: 10.0        # percentage points, absolute change
   cardinality_change_pct: 50.0
   mean_shift_sigma: 3.0
   row_count_change_pct: 50.0
-
-  # Tier 2 — needs quantiles, histograms, or distinct value frequencies, all of
-  # which are `default=False` in DataHub's GE profiler config. If you haven't
-  # enabled them, PSI simply never fires and Tier 1 carries the drift signal.
-  psi: 0.20
 
 # Let statistical findings block. Off by default, and think hard before
 # enabling: a false BLOCK is the fastest way to get a gate deleted.

@@ -19,11 +19,8 @@ import math
 import pytest
 
 from undertow.differ.statistical import (
-    TIER_1,
-    TIER_2,
     diff_statistics,
     profile_coverage,
-    psi,
 )
 from undertow.models import (
     AssetSnapshot,
@@ -32,11 +29,8 @@ from undertow.models import (
     FieldProfileSnapshot,
     Finding,
     FindingKind,
-    HistogramSnapshot,
     ProfileSnapshot,
-    QuantileSnapshot,
     UndertowSnapshot,
-    ValueFrequencySnapshot,
 )
 from undertow.policy import Thresholds
 
@@ -79,15 +73,6 @@ def asset(
 
 def snap(*assets: AssetSnapshot) -> UndertowSnapshot:
     return UndertowSnapshot(model_urn=MODEL, assets={a.urn: a for a in assets})
-
-
-def quantiles(*pairs: tuple[str, float]) -> tuple[QuantileSnapshot, ...]:
-    """DataHub stores both members as strings; the differ has to parse them."""
-    return tuple(QuantileSnapshot(quantile=q, value=str(v)) for q, v in pairs)
-
-
-def frequencies(**counts: int) -> tuple[ValueFrequencySnapshot, ...]:
-    return tuple(ValueFrequencySnapshot(value=k, frequency=v) for k, v in counts.items())
 
 
 def diff(
@@ -139,19 +124,8 @@ def test_coverage_says_so_when_it_is_completely_blind() -> None:
     assert "could not run" in coverage.summary()
 
 
-def test_coverage_counts_tier_2_columns_separately() -> None:
-    points = quantiles(("0.25", 10), ("0.5", 20), ("0.75", 30))
-    before = asset(profile(mean="20", quantiles=points))
-    after = asset(profile(mean="20", quantiles=points))
-
-    coverage = profile_coverage(snap(before), snap(after))
-
-    assert coverage.columns_tier_2 == 1
-    assert "tier 2" in coverage.summary()
-
-
 # --------------------------------------------------------------------------
-# Tier 1 — null rate
+# Null rate
 # --------------------------------------------------------------------------
 
 
@@ -164,7 +138,6 @@ def test_null_rate_jump_above_threshold_is_reported() -> None:
     assert len(findings) == 1
     assert findings[0].kind is FindingKind.NULL_RATE_JUMP
     assert findings[0].evidence["jump_pp"] == pytest.approx(41.0)
-    assert findings[0].evidence["tier"] == TIER_1
 
 
 def test_null_rate_jump_below_threshold_is_silent() -> None:
@@ -341,206 +314,6 @@ def test_every_statistical_finding_is_probable() -> None:
 
     assert len(findings) >= 2
     assert all(f.confidence is Confidence.PROBABLE for f in findings)
-
-
-# --------------------------------------------------------------------------
-# Tier 2 — PSI
-# --------------------------------------------------------------------------
-
-
-def test_psi_of_an_identical_distribution_is_zero() -> None:
-    assert psi([0.2, 0.3, 0.5], [0.2, 0.3, 0.5]) == pytest.approx(0.0)
-
-
-def test_psi_normalises_counts_and_proportions_alike() -> None:
-    assert psi([20, 30, 50], [0.2, 0.3, 0.5]) == pytest.approx(0.0)
-
-
-def test_psi_grows_with_divergence() -> None:
-    mild = psi([0.25, 0.25, 0.25, 0.25], [0.30, 0.25, 0.25, 0.20])
-    severe = psi([0.25, 0.25, 0.25, 0.25], [0.70, 0.15, 0.10, 0.05])
-
-    assert mild is not None and severe is not None
-    assert 0 < mild < severe
-
-
-def test_psi_matches_a_hand_computed_value() -> None:
-    # Two buckets, 0.5/0.5 -> 0.6/0.4:
-    #   (0.6-0.5)·ln(0.6/0.5) + (0.4-0.5)·ln(0.4/0.5)
-    expected = 0.1 * math.log(1.2) + (-0.1) * math.log(0.8)
-
-    assert psi([0.5, 0.5], [0.6, 0.4]) == pytest.approx(expected)
-
-
-def test_psi_is_symmetric() -> None:
-    forward = psi([0.2, 0.8], [0.5, 0.5])
-    backward = psi([0.5, 0.5], [0.2, 0.8])
-
-    assert forward is not None and backward is not None
-    assert forward == pytest.approx(backward)
-
-
-@pytest.mark.parametrize(
-    ("baseline", "current"),
-    [
-        ([0.5, 0.5], [1.0]),        # mismatched lengths
-        ([], []),                   # empty
-        ([0.0, 0.0], [0.5, 0.5]),   # nothing in the baseline
-        ([0.5, 0.5], [0.0, 0.0]),   # nothing in the current
-        ([-1.0, 2.0], [0.5, 0.5]),  # negative mass
-    ],
-)
-def test_psi_returns_none_when_it_cannot_measure(
-    baseline: list[float], current: list[float]
-) -> None:
-    # None, not 0.0. Returning zero would be indistinguishable from "measured,
-    # and stable" — the exact confusion this module is built to avoid.
-    assert psi(baseline, current) is None
-
-
-def test_identical_quantiles_produce_no_distribution_shift() -> None:
-    points = quantiles(("0.05", 10), ("0.25", 25), ("0.5", 50), ("0.75", 75), ("0.95", 95))
-    before = asset(profile(quantiles=points))
-    after = asset(profile(quantiles=points))
-
-    assert diff(before, after) == []
-
-
-def test_shifted_quantiles_are_reported_as_tier_2() -> None:
-    before = asset(
-        profile(quantiles=quantiles(("0.05", 10), ("0.25", 25), ("0.5", 50),
-                                    ("0.75", 75), ("0.95", 95)))
-    )
-    after = asset(
-        profile(quantiles=quantiles(("0.05", 60), ("0.25", 70), ("0.5", 80),
-                                    ("0.75", 90), ("0.95", 99)))
-    )
-
-    findings = diff(before, after)
-
-    assert len(findings) == 1
-    assert findings[0].kind is FindingKind.DISTRIBUTION_SHIFT
-    assert findings[0].evidence["tier"] == TIER_2
-    assert findings[0].evidence["source"] == "quantile"
-    assert isinstance(findings[0].evidence["psi"], float)
-
-
-def test_categorical_psi_uses_the_union_of_categories() -> None:
-    # A category vanishing entirely is the strongest drift signal there is;
-    # intersecting the two sides would delete exactly that evidence.
-    before = asset(profile(distinct_value_frequencies=frequencies(uk=500, us=480, de=20)))
-    after = asset(profile(distinct_value_frequencies=frequencies(uk=990, us=10)))
-
-    findings = diff(before, after)
-
-    assert findings[0].kind is FindingKind.DISTRIBUTION_SHIFT
-    assert findings[0].evidence["source"] == "categorical"
-    assert findings[0].evidence["buckets"] == 3
-
-
-def test_histogram_is_preferred_over_quantiles_when_bins_align() -> None:
-    bins = ("0", "50", "100")
-    points = quantiles(("0.25", 10), ("0.5", 20), ("0.75", 30))
-    before = asset(
-        profile(quantiles=points, histogram=HistogramSnapshot(boundaries=bins,
-                                                              heights=(0.9, 0.1)))
-    )
-    after = asset(
-        profile(quantiles=points, histogram=HistogramSnapshot(boundaries=bins,
-                                                              heights=(0.1, 0.9)))
-    )
-
-    findings = diff(before, after)
-
-    assert findings[0].evidence["source"] == "histogram"
-
-
-def test_misaligned_histogram_bins_fall_back_rather_than_compare_nonsense() -> None:
-    # DataHub re-profiles independently each run, so bins genuinely move.
-    # Comparing masses across different boundaries would be a confident lie.
-    points = quantiles(("0.25", 10), ("0.5", 20), ("0.75", 30))
-    before = asset(
-        profile(quantiles=points,
-                histogram=HistogramSnapshot(boundaries=("0", "50"), heights=(1.0,)))
-    )
-    after = asset(
-        profile(quantiles=points,
-                histogram=HistogramSnapshot(boundaries=("0", "60"), heights=(1.0,)))
-    )
-
-    assert diff(before, after) == []  # quantiles are identical, so nothing to report
-
-
-def test_psi_threshold_is_configurable() -> None:
-    before = asset(
-        profile(quantiles=quantiles(("0.25", 10), ("0.5", 20), ("0.75", 30)))
-    )
-    after = asset(
-        profile(quantiles=quantiles(("0.25", 12), ("0.5", 22), ("0.75", 33)))
-    )
-
-    lenient = diff(before, after, thresholds=Thresholds(psi=0.9))
-    strict = diff(before, after, thresholds=Thresholds(psi=0.0001))
-
-    assert lenient == []
-    assert len(strict) == 1
-
-
-def test_tier_2_suppresses_the_coarser_tier_1_signals() -> None:
-    # PSI already describes the shift. Emitting mean-shift and range-violation
-    # alongside it would report one event three times.
-    before = asset(
-        profile(mean="50", stdev="1", min="10", max="95",
-                quantiles=quantiles(("0.05", 10), ("0.25", 25), ("0.5", 50),
-                                    ("0.75", 75), ("0.95", 95)))
-    )
-    after = asset(
-        profile(mean="80", stdev="1", min="5", max="200",
-                quantiles=quantiles(("0.05", 60), ("0.25", 70), ("0.5", 80),
-                                    ("0.75", 90), ("0.95", 99)))
-    )
-
-    kinds = [f.kind for f in diff(before, after)]
-
-    assert kinds == [FindingKind.DISTRIBUTION_SHIFT]
-
-
-def test_null_rate_still_reports_alongside_tier_2() -> None:
-    # Nulls are not a distribution shift in the profiled values — PSI is
-    # computed over non-null data — so this one is not suppressed.
-    points_before = quantiles(("0.25", 10), ("0.5", 20), ("0.75", 30))
-    points_after = quantiles(("0.25", 90), ("0.5", 95), ("0.75", 99))
-    before = asset(profile(null_proportion=0.0, quantiles=points_before))
-    after = asset(profile(null_proportion=0.5, quantiles=points_after))
-
-    kinds = {f.kind for f in diff(before, after)}
-
-    assert kinds == {FindingKind.NULL_RATE_JUMP, FindingKind.DISTRIBUTION_SHIFT}
-
-
-def test_too_few_quantile_points_falls_back_to_tier_1() -> None:
-    # Two cut points give no interior structure; mean-shift describes it better.
-    before = asset(profile(mean="10", stdev="1", quantiles=quantiles(("0.5", 10))))
-    after = asset(profile(mean="90", stdev="1", quantiles=quantiles(("0.5", 90))))
-
-    findings = diff(before, after)
-
-    assert [f.kind for f in findings] == [FindingKind.MEAN_SHIFT]
-
-
-def test_unparseable_quantile_values_do_not_crash_tier_2() -> None:
-    before = asset(profile(quantiles=quantiles(("0.25", 10), ("0.5", 20), ("0.75", 30))))
-    after = asset(
-        profile(
-            quantiles=(
-                QuantileSnapshot(quantile="0.25", value="n/a"),
-                QuantileSnapshot(quantile="0.5", value="n/a"),
-                QuantileSnapshot(quantile="0.75", value="n/a"),
-            )
-        )
-    )
-
-    assert diff(before, after) == []
 
 
 # --------------------------------------------------------------------------

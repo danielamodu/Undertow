@@ -64,14 +64,14 @@ def verdict_for(findings: list[Finding], policy: Policy | None = None) -> Verdic
 def test_no_findings_is_clear_and_exits_zero() -> None:
     v = verdict_for([])
     assert v.severity is Severity.CLEAR
-    assert v.exit_code == 0
+    assert v.exit_code() == 0
     assert v.ruled_findings == ()
 
 
 def test_dropped_column_blocks_and_exits_one() -> None:
     v = verdict_for([finding(FindingKind.COLUMN_DROPPED)])
     assert v.severity is Severity.BLOCK
-    assert v.exit_code == 1
+    assert v.exit_code() == 1
     assert len(v.blocking) == 1
 
 
@@ -88,12 +88,38 @@ def test_verdict_takes_the_worst_severity() -> None:
     assert len(v.warnings) == 2
 
 
+def test_exit_codes_separate_a_block_from_a_broken_gate() -> None:
+    """1 means the gate said stop. 2 is reserved for "no verdict was produced".
+
+    An earlier revision returned 2 for both, so a pipeline could not tell an
+    upstream breakage from Undertow itself falling over — two outcomes that
+    demand completely different responses.
+    """
+    assert verdict_for([]).exit_code() == 0
+    assert verdict_for([finding(FindingKind.MEAN_SHIFT)]).exit_code() == 0
+    assert verdict_for([finding(FindingKind.COLUMN_DROPPED)]).exit_code() == 1
+
+
+def test_fail_on_warn_is_opt_in() -> None:
+    """A warning annotates a deploy unless a team explicitly says otherwise."""
+    warned = verdict_for([finding(FindingKind.MEAN_SHIFT)])
+
+    assert warned.severity is Severity.WARN
+    assert warned.exit_code() == 0
+    assert warned.exit_code(fail_on_warn=True) == 1
+
+    # The flag must never soften a BLOCK in either direction.
+    blocked = verdict_for([finding(FindingKind.COLUMN_DROPPED)])
+    assert blocked.exit_code(fail_on_warn=True) == 1
+    assert blocked.exit_code(fail_on_warn=False) == 1
+
+
 def test_warnings_alone_do_not_fail_ci() -> None:
     # The whole point of separating WARN from BLOCK: a drift signal annotates
     # the PR, it does not stop the deploy.
     v = verdict_for([finding(FindingKind.MEAN_SHIFT), finding(FindingKind.NULL_RATE_JUMP)])
     assert v.severity is Severity.WARN
-    assert v.exit_code == 0
+    assert v.exit_code() == 0
 
 
 # --------------------------------------------------------------------------
@@ -109,7 +135,6 @@ def test_warnings_alone_do_not_fail_ci() -> None:
         FindingKind.MEAN_SHIFT,
         FindingKind.RANGE_VIOLATION,
         FindingKind.ROW_COUNT_CHANGE,
-        FindingKind.DISTRIBUTION_SHIFT,
     ],
 )
 def test_statistical_kinds_are_probable(kind: FindingKind) -> None:
@@ -134,18 +159,18 @@ def test_graph_read_kinds_are_certain(kind: FindingKind) -> None:
 def test_probable_finding_cannot_block_by_default() -> None:
     # Even when a policy file explicitly asks for it. This is the guard that
     # keeps a noisy PSI threshold from ever halting a deploy by accident.
-    policy = Policy(rules={FindingKind.DISTRIBUTION_SHIFT.value: Severity.BLOCK})
-    v = verdict_for([finding(FindingKind.DISTRIBUTION_SHIFT)], policy)
+    policy = Policy(rules={FindingKind.MEAN_SHIFT.value: Severity.BLOCK})
+    v = verdict_for([finding(FindingKind.MEAN_SHIFT)], policy)
     assert v.severity is Severity.WARN
-    assert v.exit_code == 0
+    assert v.exit_code() == 0
 
 
 def test_probable_can_block_when_explicitly_opted_in() -> None:
     policy = Policy(
-        rules={FindingKind.DISTRIBUTION_SHIFT.value: Severity.BLOCK},
+        rules={FindingKind.MEAN_SHIFT.value: Severity.BLOCK},
         allow_probable_block=True,
     )
-    v = verdict_for([finding(FindingKind.DISTRIBUTION_SHIFT)], policy)
+    v = verdict_for([finding(FindingKind.MEAN_SHIFT)], policy)
     assert v.severity is Severity.BLOCK
 
 
@@ -176,7 +201,7 @@ def test_active_exemption_downgrades_but_keeps_the_finding_visible() -> None:
     v = verdict_for([finding(FindingKind.COLUMN_DROPPED)], policy)
 
     assert v.severity is Severity.WARN
-    assert v.exit_code == 0
+    assert v.exit_code() == 0
     # Downgraded, not deleted — accepted risk stays legible in the report.
     assert len(v.ruled_findings) == 1
     assert v.ruled_findings[0].exempted_by is not None

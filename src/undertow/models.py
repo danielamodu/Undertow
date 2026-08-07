@@ -75,16 +75,12 @@ class FindingKind(str, enum.Enum):
     OWNERSHIP_LOST = "OWNERSHIP_LOST"
     NEW_SENSITIVE_TAG = "NEW_SENSITIVE_TAG"
 
-    # Statistical differ, tier 1 — available from DataHub's default profiling.
+    # Statistical differ — available from DataHub's default profiling.
     NULL_RATE_JUMP = "NULL_RATE_JUMP"
     CARDINALITY_CHANGE = "CARDINALITY_CHANGE"
     MEAN_SHIFT = "MEAN_SHIFT"
     RANGE_VIOLATION = "RANGE_VIOLATION"
     ROW_COUNT_CHANGE = "ROW_COUNT_CHANGE"
-
-    # Statistical differ, tier 2 — needs quantiles/histogram, which are
-    # `default=False` in DataHub's profiler config. See architecture A.4.
-    DISTRIBUTION_SHIFT = "DISTRIBUTION_SHIFT"
 
     @property
     def confidence(self) -> Confidence:
@@ -103,9 +99,58 @@ _PROBABLE_KINDS: frozenset[FindingKind] = frozenset(
         FindingKind.MEAN_SHIFT,
         FindingKind.RANGE_VIOLATION,
         FindingKind.ROW_COUNT_CHANGE,
-        FindingKind.DISTRIBUTION_SHIFT,
     }
 )
+
+
+def short_urn(urn: str) -> str:
+    """The human-readable name inside a DataHub URN.
+
+    URNs carry platform and environment for uniqueness, none of which an
+    engineer reading an incident report needs:
+
+        urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)
+            -> transactions.raw
+        urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)
+            -> transaction_velocity_7d
+        urn:li:corpuser:data_eng_tom
+            -> data_eng_tom
+
+    Display only — every structured field keeps the full URN, so nothing that is
+    written back to DataHub or matched against a policy is affected.
+    """
+    if not urn.startswith("urn:li:"):
+        return urn
+
+    # Flat URNs (corpuser, tag, glossaryTerm) have no parenthesised key.
+    if "(" not in urn:
+        return urn.rsplit(":", 1)[-1]
+
+    inner = urn[urn.index("(") + 1 : urn.rindex(")")] if ")" in urn else urn[urn.index("(") + 1 :]
+
+    # Split on top-level commas only; the platform URN contains colons but the
+    # key itself is comma-delimited.
+    depth = 0
+    parts: list[str] = []
+    current: list[str] = []
+    for ch in inner:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+            continue
+        current.append(ch)
+    parts.append("".join(current))
+
+    # Drop a trailing fabric (PROD/DEV/...) and any leading platform URN, then
+    # take the last remaining segment — the entity's own name.
+    meaningful = [p for p in parts if not p.startswith("urn:li:dataPlatform:")]
+    if len(meaningful) > 1 and meaningful[-1].isupper():
+        meaningful = meaningful[:-1]
+    return meaningful[-1] if meaningful else urn
 
 
 class AttributionHop(BaseModel):
@@ -123,6 +168,11 @@ class AttributionHop(BaseModel):
 
     def label(self) -> str:
         return f"{self.urn}.{self.column}" if self.column else self.urn
+
+    def short_label(self) -> str:
+        """`label()` with the URN reduced to its name. For terminal output."""
+        name = short_urn(self.urn)
+        return f"{name}.{self.column}" if self.column else name
 
 
 class AttributionPath(BaseModel):
@@ -171,33 +221,6 @@ class ColumnSnapshot(BaseModel):
     tags: tuple[str, ...] = ()
 
 
-class QuantileSnapshot(BaseModel):
-    """Mirrors `Quantile` in `DatasetFieldProfile.pdl` — both members are strings."""
-
-    model_config = _BASE
-
-    quantile: str
-    value: str
-
-
-class ValueFrequencySnapshot(BaseModel):
-    """Mirrors `ValueFrequency` — `value` is a string, `frequency` a count."""
-
-    model_config = _BASE
-
-    value: str
-    frequency: int
-
-
-class HistogramSnapshot(BaseModel):
-    """Mirrors `Histogram`. Heights may be counts or proportions; the differ normalises."""
-
-    model_config = _BASE
-
-    boundaries: tuple[str, ...] = ()
-    heights: tuple[float, ...] = ()
-
-
 class FieldProfileSnapshot(BaseModel):
     """Profiled statistics for one column.
 
@@ -223,10 +246,6 @@ class FieldProfileSnapshot(BaseModel):
     mean: str | None = None
     median: str | None = None
     stdev: str | None = None
-    # Tier 2 — present only when the ingestion recipe opted in.
-    quantiles: tuple[QuantileSnapshot, ...] = ()
-    distinct_value_frequencies: tuple[ValueFrequencySnapshot, ...] = ()
-    histogram: HistogramSnapshot | None = None
     sample_values: tuple[str, ...] = ()
 
 
@@ -366,10 +385,29 @@ class Verdict(BaseModel):
     # and 12 features" is what makes a CLEAR verdict mean something.
     assets_checked: int = 0
 
-    @property
-    def exit_code(self) -> int:
-        """1 on BLOCK, 0 otherwise. This is what actually gates CI."""
-        return 1 if self.severity is Severity.BLOCK else 0
+    def exit_code(self, *, fail_on_warn: bool = False) -> int:
+        """The process exit status for this verdict. The only place CI status is decided.
+
+        Three codes, and the third is the one that matters:
+
+            0  proceed   — CLEAR, or WARN when the caller hasn't opted in
+            1  blocked   — the gate ran and said stop
+            2  error     — the gate could not produce a verdict at all
+
+        Separating 1 from 2 is deliberate. An earlier revision used 2 for both a
+        BLOCK and a crash, which left a pipeline unable to distinguish "your
+        upstream broke" from "Undertow broke" — the two outcomes that demand
+        completely different responses.
+
+        WARN exits 0 by default because the product says a warning annotates a
+        deploy rather than stopping one. `fail_on_warn` is for teams that want
+        the stricter reading, and it is a choice they make explicitly.
+        """
+        if self.severity is Severity.BLOCK:
+            return 1
+        if self.severity is Severity.WARN and fail_on_warn:
+            return 1
+        return 0
 
     def of_severity(self, severity: Severity) -> tuple[RuledFinding, ...]:
         return tuple(rf for rf in self.ruled_findings if rf.severity is severity)

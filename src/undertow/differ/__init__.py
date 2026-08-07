@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from undertow.differ.governance import diff_governance
 from undertow.differ.schema import diff_schema, is_compatible_change
-from undertow.differ.statistical import ProfileCoverage, diff_statistics, profile_coverage, psi
+from undertow.differ.statistical import ProfileCoverage, diff_statistics, profile_coverage
 from undertow.models import Finding, FindingKind, UndertowSnapshot
 from undertow.policy import Policy
 
@@ -63,5 +63,4 @@ __all__ = [
     "diff_statistics",
     "is_compatible_change",
     "profile_coverage",
-    "psi",
 ]

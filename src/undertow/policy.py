@@ -76,10 +76,10 @@ class Exemption(BaseModel):
 class Thresholds(BaseModel):
     """Statistical trigger points.
 
-    Tier 1 thresholds work on DataHub's *default* profiling output. Tier 2 (PSI)
-    needs quantiles or histograms, which are `default=False` in
-    `ge_profiling_config.py` — so `psi` may simply never fire on a stock
-    instance. That is expected, not a bug; see architecture A.4.
+    All of these read statistics DataHub profiles by default, so they work on a
+    stock instance. PSI was removed deliberately — it needs quantiles or
+    histograms, which are `default=False` in `ge_profiling_config.py`, so it
+    could never fire outside our own fixture. See `differ/statistical.py`.
     """
 
     model_config = _BASE
@@ -88,7 +88,6 @@ class Thresholds(BaseModel):
     cardinality_change_pct: float = 50.0
     mean_shift_sigma: float = 3.0
     row_count_change_pct: float = 50.0
-    psi: float = 0.20                    # tier 2 only
 
 
 _DEFAULT_SEVERITIES: dict[FindingKind, Severity] = {
@@ -112,7 +111,6 @@ _DEFAULT_SEVERITIES: dict[FindingKind, Severity] = {
     FindingKind.MEAN_SHIFT: Severity.WARN,
     FindingKind.RANGE_VIOLATION: Severity.WARN,
     FindingKind.ROW_COUNT_CHANGE: Severity.WARN,
-    FindingKind.DISTRIBUTION_SHIFT: Severity.WARN,
 }
 
 
