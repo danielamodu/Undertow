@@ -1,0 +1,44 @@
+﻿{
+    "globalTags":  {
+                       "com.linkedin.common.GlobalTags":  {
+                                                              "tags":  [
+                                                                           {
+                                                                               "tag":  "urn:li:tag:undertow:blocked"
+                                                                           }
+                                                                       ]
+                                                          }
+                   },
+    "structuredProperties":  [
+                                 {
+                                     "propertyUrn":  "urn:li:structuredProperty:undertow_baseline",
+                                     "value":  "{\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"captured_at\":\"2026-08-07T09:30:26.  ...[truncated: full UndertowSnapshot JSON, 4552 chars]"
+                                 },
+                                 {
+                                     "propertyUrn":  "urn:li:structuredProperty:undertow_risk_verdict",
+                                     "value":  "BLOCK"
+                                 },
+                                 {
+                                     "propertyUrn":  "urn:li:structuredProperty:undertow_last_checked",
+                                     "value":  "2026-08-07T09:31:48.815749+00:00"
+                                 }
+                             ],
+    "assertionCount":  1,
+    "assertionUrn":  "urn:li:assertion:c3e79c057400bc9ad701b995812a3f0d",
+    "assertionInfo":  {
+                          "com.linkedin.assertion.AssertionInfo":  {
+                                                                       "customProperties":  {
+
+                                                                                            },
+                                                                       "customAssertion":  {
+                                                                                               "type":  "UNDERTOW_CHECK",
+                                                                                               "entity":  "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
+                                                                                               "logic":  "Undertow evaluation over 6 upstream assets for model urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+                                                                                           },
+                                                                       "source":  {
+                                                                                      "type":  "EXTERNAL"
+                                                                                  },
+                                                                       "type":  "CUSTOM",
+                                                                       "entityUrn":  "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)"
+                                                                   }
+                      }
+}

@@ -155,7 +155,7 @@ Reading the graph is table stakes. Writing conclusions back is what makes the st
 - Attribution paths with owner resolution
 - Deterministic risk policy, configurable via `undertow.yaml`
 - Write-back: native **assertion** (primary), tag, structured properties, `institutionalMemory` link — all four verified on open-source Core
-- Reference fixture: a real trained model with genuine end-to-end lineage in DataHub
+- Reference fixture: a seeded `mlModel` with genuine end-to-end lineage in DataHub — a three-hop chain (`transactions.raw` → `staging.transactions_clean` → `transaction_velocity_7d` → `fraud_detector_v3`) including column-level `fineGrainedLineage`. The model's training metrics are seeded metadata, not the output of a training run; Undertow gates on lineage, so nothing in the product depends on the weights existing.
 
 ### Explicitly NOT in scope
 - ❌ **Predicting accuracy degradation** — unsolved; claiming it destroys trust
@@ -177,7 +177,7 @@ Reading the graph is table stakes. Writing conclusions back is what makes the st
 | **Originality** | The **join** — drift statistic × lineage graph → attribution — is unimplemented anywhere, and gating a *model deploy* (rather than a data PR) on upstream risk is an empty cell in the market. |
 | **Real-world usefulness** | Silent model degradation from upstream change is a top-3 MLOps failure mode with real money attached. |
 | **Submission quality** | One-command demo, seeded fixture, <3min video with a clean narrative arc. |
-| **OSS contribution bonus** | `MLModelPatchBuilder` — structured-property patch support for `mlModel`, a real gap in `datahub/specific/` where only the base machinery exists. Plus ML-lineage emitter helpers. |
+| **OSS contribution bonus** | `MLModelPatchBuilder` for `datahub/specific/`. DataHub's `entity_client.update()` accepts a `MetadataPatchProposal` and routes it to a surgical `PATCH`, and `datahub/specific/` supplies builders for seven entity types — but none for an ML entity, so `mlModel` aspects can only be written by full-aspect `UPSERT`. Verified against a live GMS: two independent `PATCH` writes to `structuredProperties` both survive; an `UPSERT` silently drops the property it didn't know about. The builder composes DataHub's existing entity-agnostic mixins — no new machinery, just the missing composition. |
 
 ### Say the quiet part first
 

@@ -119,15 +119,33 @@ Undertow leverages DataHub both as an input metadata graph and an output asserti
 
 ## OSS Contribution
 
-Undertow introduces `MLModelPatchBuilder` (located in `src/undertow/reporter/datahub_writer.py`), which fills a gap in `datahub.specific` by composing `HasStructuredPropertiesPatch` over `MetadataPatchProposal` specifically for `mlModel` entities. This contribution enables fluently mutating structured properties on DataHub ML entities using the official SDK patch builder pattern.
+**`MLModelPatchBuilder` for `datahub/specific/`** — proposed in [`contrib/datahub-mlmodel-patch-builder/`](contrib/datahub-mlmodel-patch-builder/mlmodel.py).
+
+DataHub's `entity_client.update()` branches on its argument: an `Entity` becomes a full-aspect `UPSERT`, a `MetadataPatchProposal` becomes a surgical `PATCH`. `datahub/specific/` ships patch builders for chart, dashboard, dataJob, dataProduct, dataset, form, and structuredProperty — but none for an ML entity, so `mlModel` aspects are `UPSERT`-only unless you hand-roll one.
+
+That matters because `UPSERT` is lossy. Verified against a live GMS:
+
+| Write path | Result |
+|---|---|
+| Two independent `PATCH` writes | Both properties survive |
+| One full-aspect `UPSERT` | The property the writer didn't know about is destroyed |
+
+Undertow writes `undertow_risk_verdict`, `undertow_last_checked`, and `undertow_baseline` as separate concerns, so this is a live problem rather than a theoretical one.
+
+The proposed builder composes DataHub's existing entity-agnostic mixins (`HasOwnershipPatch`, `HasTagsPatch`, `HasStructuredPropertiesPatch`, …) exactly as `DataProductPatchBuilder` does — no new machinery, just the missing composition, and 19 mutation methods rather than the 2 our vendored version exposes.
+
+*Note: `datahub.sdk.MLModel` already supports mlModel structured properties via the newer SDK layer. The gap is specifically the absence of a `PATCH`-emitting builder, not the absence of mlModel support.*
 
 ---
 
 ## Prior Art & Research
 
-Recent data governance and ML observability research (e.g., arXiv:2308.09341 and arXiv:2401.11890) proposed combining lineage graphs with dataset profiling for automated model risk attribution as future work. 
+Two 2025 papers by Leest et al. frame the gap Undertow occupies:
 
-**Undertow is the first open-source implementation of this approach**, turning theoretical lineage attribution into an actionable, automated pre-deploy gate.
+- **[arXiv:2510.24142](https://arxiv.org/abs/2510.24142)** — *Monitoring and Observability of Machine Learning Systems: Current Practices and Gaps.* Seven focus groups with practitioners; documents how teams validate models, detect faults, and explain degradations, and where that practice falls short.
+- **[arXiv:2510.23528](https://arxiv.org/abs/2510.23528)** — *Tracing Distribution Shifts with Causal System Maps.* Proposes making the propagation paths between environment and ML internals explicit so distribution shifts can be attributed rather than merely detected. Explicitly work-in-progress: an approach and research agenda, not an implementation.
+
+Undertow implements that attribution framing against a lineage graph that already exists in production — DataHub — and makes the result a blocking pre-deploy gate.
 
 ---
 
