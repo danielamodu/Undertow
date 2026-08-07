@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.tree import Tree
 
-from undertow.models import Severity, Verdict
+from undertow.models import Severity, Verdict, short_urn
 
 
 def render_console(
@@ -33,15 +33,17 @@ def render_console(
     n_block = len(verdict.blocking)
     n_warn = len(verdict.warnings)
 
+    model_name = short_urn(verdict.model_urn)
+
     if verdict.severity is Severity.CLEAR:
         header_text = Text(
-            f"{emoji} CLEAR — {verdict.model_urn} ({verdict.assets_checked} assets checked, no material change)",
+            f"{emoji} CLEAR — {model_name} ({verdict.assets_checked} assets checked, no material change)",
             style="bold green",
         )
     else:
         style_color = "bold red" if verdict.severity is Severity.BLOCK else "bold yellow"
         header_text = Text(
-            f"{emoji} {verdict.severity.value} — {verdict.model_urn} ({n_block} blocking, {n_warn} warning)",
+            f"{emoji} {verdict.severity.value} — {model_name} ({n_block} blocking, {n_warn} warning)",
             style=style_color,
         )
 
@@ -53,23 +55,27 @@ def render_console(
         blocking_content = Text()
         for i, rf in enumerate(verdict.blocking):
             finding = rf.finding
-            feat = finding.affected_feature_urn or "unknown_feature"
-            feat_short = feat.split(":")[-1] if ":" in feat else feat
+            feat = finding.affected_feature_urn
+            feat_short = short_urn(feat) if feat else "unattributed"
 
             headline = f"Feature `{feat_short}` — {finding.summary}\n\n"
             blocking_content.append(headline, style="bold red")
 
             if finding.path and finding.path.hops:
                 hops = finding.path.hops
-                root_label = hops[0].label()
-                owners_str = f" ({', '.join(finding.path.owners)})" if finding.path.owners else ""
-                
+                root_label = hops[0].short_label()
+                owners_str = (
+                    f" (@{', @'.join(short_urn(o) for o in finding.path.owners)})"
+                    if finding.path.owners
+                    else ""
+                )
+
                 # Build tree view
                 tree = Tree(f"[bold]{root_label}[/bold]{owners_str}")
                 current_node = tree
                 for hop in hops[1:]:
                     via_info = f" [{hop.via}]" if hop.via else ""
-                    current_node = current_node.add(f"{hop.label()}{via_info}")
+                    current_node = current_node.add(f"{hop.short_label()}{via_info}")
                 
                 # Render tree to string for panel
                 tree_console = Console(file=io.StringIO(), force_terminal=False)
@@ -102,20 +108,20 @@ def render_console(
         warning_content = Text()
         for i, rf in enumerate(verdict.warnings):
             finding = rf.finding
-            feat = finding.affected_feature_urn or "unknown_feature"
-            feat_short = feat.split(":")[-1] if ":" in feat else feat
+            feat = finding.affected_feature_urn
+            feat_short = short_urn(feat) if feat else "unattributed"
 
             headline = f"Feature `{feat_short}` — {finding.summary}\n"
             warning_content.append(headline, style="bold yellow")
 
             if finding.path and finding.path.hops:
-                origin_urn = finding.path.root.urn
+                origin = finding.path.root.short_label()
                 depth = finding.path.depth
-                warning_content.append(
-                    f"  origin: {origin_urn} ({depth} hops)\n", style="dim"
-                )
+                warning_content.append(f"  origin: {origin} ({depth} hops)\n", style="dim")
             else:
-                warning_content.append(f"  subject: {finding.subject_urn}\n", style="dim")
+                warning_content.append(
+                    f"  subject: {short_urn(finding.subject_urn)}\n", style="dim"
+                )
 
             warning_content.append(
                 f"  Confidence: {finding.confidence.value} ({finding.kind.value.lower().replace('_', ' ')})\n",
@@ -135,7 +141,7 @@ def render_console(
         con.print()
 
     if written_to_datahub:
-        con.print(f"✍ Written to DataHub → {verdict.model_urn}")
+        con.print(f"✍ Written to DataHub → {model_name}")
 
 
 def format_console(verdict: Verdict, *, written_to_datahub: bool = False) -> str:

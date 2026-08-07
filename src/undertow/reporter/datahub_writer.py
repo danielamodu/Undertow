@@ -14,6 +14,23 @@ from datahub.specific.aspect_helpers.structured_properties import (
 from undertow.models import Severity, Verdict
 
 
+class WriteBackError(RuntimeError):
+    """Raised when one or more aspects failed to emit.
+
+    Carries the partial success so the reporter can say exactly what landed and
+    what did not. "Written to DataHub" is a claim Undertow makes to an engineer
+    about their catalog; it has to be earned per aspect, not assumed from a flag.
+    """
+
+    def __init__(self, *, emitted: tuple[str, ...], failures: tuple[tuple[str, str], ...]) -> None:
+        self.emitted = emitted
+        self.failures = failures
+        detail = "; ".join(f"{aspect}: {reason}" for aspect, reason in failures)
+        super().__init__(
+            f"{len(failures)} of {len(emitted) + len(failures)} aspects failed to emit — {detail}"
+        )
+
+
 class MLModelPatchBuilder(HasStructuredPropertiesPatch, MetadataPatchProposal):
     """Patch builder for mlModel structured properties.
 
@@ -191,12 +208,18 @@ def write_verdict_to_datahub(
 
     mcps = create_verdict_mcps(verdict, pr_url=pr_url)
     emitted_aspects: list[str] = []
+    failures: list[tuple[str, str]] = []
 
     for mcp in mcps:
         try:
             emitter.emit_mcp(mcp)
             emitted_aspects.append(mcp.aspectName)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Collected rather than swallowed. The caller decides how loud to be,
+            # but it must not be able to report a write that did not happen.
+            failures.append((str(mcp.aspectName), f"{type(exc).__name__}: {exc}"))
+
+    if failures:
+        raise WriteBackError(emitted=tuple(emitted_aspects), failures=tuple(failures))
 
     return emitted_aspects

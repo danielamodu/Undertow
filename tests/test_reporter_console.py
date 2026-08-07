@@ -66,7 +66,7 @@ def test_format_console_warning_and_clear() -> None:
     model_urn = "urn:li:mlModel:(urn:li:dataPlatform:mlflow,fraud_detector_v3,PROD)"
 
     finding = Finding(
-        kind=FindingKind.DISTRIBUTION_SHIFT,
+        kind=FindingKind.MEAN_SHIFT,
         subject_urn="raw.merchants",
         affected_feature_urn="features.txn_aggregates.merchant_risk_score",
         summary="distribution shift",

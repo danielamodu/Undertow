@@ -59,16 +59,33 @@ def attribute_findings(
         if finding.subject_urn in queries:
             evidence["query_sql"] = queries[finding.subject_urn]
 
-        enriched.append(
-            finding.model_copy(
-                update={
-                    "path": enriched_path,
-                    "evidence": evidence,
-                }
-            )
-        )
+        # The path already runs root-cause -> ... -> mlFeature -> mlModel, so the
+        # affected feature is on it and does not need a second lookup. Without
+        # this the reporter fell back to "unknown_feature" in the headline while
+        # printing the feature's URN two lines below — the single most visible
+        # defect in the demo's output.
+        update: dict[str, object] = {"path": enriched_path, "evidence": evidence}
+        if finding.affected_feature_urn is None:
+            feature_urn = _feature_on_path(enriched_path)
+            if feature_urn is not None:
+                update["affected_feature_urn"] = feature_urn
+
+        enriched.append(finding.model_copy(update=update))
 
     return enriched
+
+
+def _feature_on_path(path: AttributionPath) -> str | None:
+    """The mlFeature this change reaches, read off the path itself.
+
+    Walked from the leaf backwards: the hop nearest the model is the feature the
+    model actually consumes, which is the one worth naming when a path fans
+    through more than one.
+    """
+    for hop in reversed(path.hops):
+        if hop.entity_type == "mlFeature":
+            return hop.urn
+    return None
 
 
 __all__ = ["attribute_findings"]
