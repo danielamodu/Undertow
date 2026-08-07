@@ -34,8 +34,22 @@ DS_STAGING_URN = (
 
 FEAT_VELOCITY_URN = "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)"
 FEAT_RISK_URN = "urn:li:mlFeature:(fraud_detection,customer_risk_score)"
+# Owned by a different team, built off the same staging table. This is what makes
+# the blast radius real: one dropped column reaches two models nobody has
+# introduced to each other.
+FEAT_VOLUME_URN = "urn:li:mlFeature:(customer_churn,customer_txn_volume)"
 
 MODEL_URN = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+MODEL_CHURN_URN = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)"
+
+# The bookends of the challenge's "training data -> features -> models ->
+# deployments" chain. Undertow gates a deploy, so the deployment being a real
+# entity in the graph rather than a figure of speech is the point.
+MODEL_GROUP_URN = "urn:li:mlModelGroup:(urn:li:dataPlatform:sagemaker,fraud_detection,PROD)"
+DEPLOYMENT_URN = (
+    "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,fraud_detector_prod,PROD)"
+)
+
 PROP_BASELINE_URN = "urn:li:structuredProperty:undertow_baseline"
 
 
@@ -351,13 +365,58 @@ def seed_features(emitter: DatahubRestEmitter) -> None:
         MetadataChangeProposalWrapper(entityUrn=FEAT_RISK_URN, aspect=feat_risk_props)
     )
 
+    # 3. customer_txn_volume -> staging.transactions_clean
+    #
+    # A different team's feature off the same staging table. The churn team has
+    # never spoken to the fraud team and neither knows they share an upstream.
+    # That is the situation the gate exists for.
+    feat_volume_props = models.MLFeaturePropertiesClass(
+        description="30-day customer transaction volume",
+        dataType="CONTINUOUS",
+        sources=[DS_STAGING_URN],
+    )
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(entityUrn=FEAT_VOLUME_URN, aspect=feat_volume_props)
+    )
+
+
+def seed_model_group_and_deployment(emitter: DatahubRestEmitter) -> None:
+    """The two ends of the chain the Production ML Agents challenge describes.
+
+    "The path from training data to features to models to deployments." Without
+    these the fixture stops at the model, and Undertow gating "a deployment" is
+    a figure of speech rather than something you can point at in the catalog.
+    """
+    print("Emitting ML model group and deployment...")
+
+    group_props = models.MLModelGroupPropertiesClass(
+        name="fraud_detection",
+        description="Fraud detection model family. v3 is the live version.",
+    )
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(entityUrn=MODEL_GROUP_URN, aspect=group_props)
+    )
+
+    deployment_props = models.MLModelDeploymentPropertiesClass(
+        description="Production SageMaker endpoint serving fraud_detector_v3.",
+        version=models.VersionTagClass(versionTag="v3"),
+        status=models.DeploymentStatusClass.IN_SERVICE,
+    )
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(entityUrn=DEPLOYMENT_URN, aspect=deployment_props)
+    )
+
 
 def seed_model(emitter: DatahubRestEmitter) -> None:
-    print("Emitting ML model...")
+    print("Emitting ML models...")
 
     model_props = models.MLModelPropertiesClass(
         description="SageMaker Fraud Detector Model v3",
         mlFeatures=[FEAT_VELOCITY_URN, FEAT_RISK_URN],
+        # Closes the chain: this model belongs to a family and is serving behind
+        # a named deployment, both resolvable in the graph.
+        groups=[MODEL_GROUP_URN],
+        deployments=[DEPLOYMENT_URN],
         trainingMetrics=[
             models.MLMetricClass(name="accuracy", value="0.95"),
             models.MLMetricClass(name="precision", value="0.92"),
@@ -367,16 +426,42 @@ def seed_model(emitter: DatahubRestEmitter) -> None:
         MetadataChangeProposalWrapper(entityUrn=MODEL_URN, aspect=model_props)
     )
 
-    ownership = models.OwnershipClass(
-        owners=[
-            models.OwnerClass(
-                owner=builder.make_user_urn("data_eng_tom"),
-                type=models.OwnershipTypeClass.TECHNICAL_OWNER,
-            )
-        ]
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(
+            entityUrn=MODEL_URN,
+            aspect=models.OwnershipClass(
+                owners=[
+                    models.OwnerClass(
+                        owner=builder.make_user_urn("ml_eng_alex"),
+                        type=models.OwnershipTypeClass.TECHNICAL_OWNER,
+                    )
+                ]
+            ),
+        )
+    )
+
+    # A second model, a different team, the same upstream table.
+    churn_props = models.MLModelPropertiesClass(
+        description="Customer churn predictor v1",
+        mlFeatures=[FEAT_VOLUME_URN],
+        trainingMetrics=[models.MLMetricClass(name="auc", value="0.88")],
     )
     emitter.emit_mcp(
-        MetadataChangeProposalWrapper(entityUrn=MODEL_URN, aspect=ownership)
+        MetadataChangeProposalWrapper(entityUrn=MODEL_CHURN_URN, aspect=churn_props)
+    )
+
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(
+            entityUrn=MODEL_CHURN_URN,
+            aspect=models.OwnershipClass(
+                owners=[
+                    models.OwnerClass(
+                        owner=builder.make_user_urn("ml_eng_priya"),
+                        type=models.OwnershipTypeClass.TECHNICAL_OWNER,
+                    )
+                ]
+            ),
+        )
     )
 
 
@@ -529,13 +614,18 @@ def main() -> None:
         seed_staging(emitter)
         seed_dataset_ownership(emitter)
         seed_features(emitter)
+        seed_model_group_and_deployment(emitter)
         seed_model(emitter)
         seed_baseline(emitter)
-        print("Successfully seeded DataHub graph!")
-        print(
-            "  transactions.raw -> staging.transactions_clean -> "
-            "transaction_velocity_7d -> fraud_detector_v3"
-        )
+        print("\nSuccessfully seeded DataHub graph.\n")
+        print("  transactions.raw")
+        print("    └─ staging.transactions_clean")
+        print("       ├─ transaction_velocity_7d  -> fraud_detector_v3   (@ml_eng_alex)")
+        print("       └─ customer_txn_volume      -> churn_predictor_v1  (@ml_eng_priya)")
+        print()
+        print("  fraud_detector_v3 -> group: fraud_detection | deployment: fraud_detector_prod")
+        print()
+        print("  One column drop in transactions.raw reaches both models.")
     except Exception as exc:
         print(f"Error seeding DataHub: {exc}", file=sys.stderr)
         sys.exit(1)
