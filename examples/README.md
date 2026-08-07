@@ -66,23 +66,35 @@ above either model, which is the whole point: nothing model-local can see it.
 |---|---|---|
 | `verdict-clear.txt` | `check` on an unchanged graph. | **0** |
 | `verdict-warn.txt` | `check` after a 4.8σ distribution shift. `PROBABLE`, so it warns and gets out of the way. | **0** |
+| `verdict-governance.txt` | `check` after the upstream is deprecated and staging is tagged PII. Nothing about the *data* changed. | **1** |
+| `github-pr-comment-upstream.md` | What `undertow impact` posts on the PR that removes the column, before it merges. | — |
 | `verdict-block.txt` | `check` after the column drop, with the full attribution path. | **1** |
 | `verdict-blast-radius.txt` | The same drop, checked from *both* models. Two teams, one column. | **1** and **1** |
 | `github-pr-comment.md` | What lands in the PR, generated via `GITHUB_STEP_SUMMARY`. | — |
 | `datahub-writeback.json` | The aspects Undertow wrote, **read back out of GMS** to prove they landed. | — |
 
-## CERTAIN and PROBABLE, side by side
+## Three differs, three demos
 
-`verdict-block.txt` and `verdict-warn.txt` are the same gate on the same graph,
-reacting to two different kinds of change:
+The same gate on the same graph, reacting to three kinds of change:
 
-| | `make break` | `make break-stats` |
-|---|---|---|
-| What changed | `transaction_amount` dropped | mean of `amount` moved 125.5 → 342.1 |
-| Read from | `schemaMetadata` — a fact | `datasetProfile` — an inference |
-| Confidence | `CERTAIN` | `PROBABLE` |
-| Verdict | BLOCK | WARN |
-| Exit | **1** | **0** |
+| | `make break` | `make break-stats` | `make break-governance` |
+|---|---|---|---|
+| What changed | `transaction_amount` dropped | mean of `amount` moved 125.5 → 342.1 | upstream deprecated; staging tagged PII |
+| Read from | `schemaMetadata` — a fact | `datasetProfile` — an inference | `deprecation` / `globalTags` — facts |
+| Confidence | `CERTAIN` | `PROBABLE` | `CERTAIN` |
+| Verdict | BLOCK | WARN | BLOCK + WARN |
+| Exit | **1** | **0** | **1** |
+
+The governance case is the one people forget. Every column is present and every
+distribution is where it was — nothing about the *data* changed. Somebody
+scheduled the upstream for deletion and somebody else classified the staging
+table as PII, and both reach a production model without touching a schema or a
+profile.
+
+Note that it splits its own verdict. Deprecation blocks; a new sensitive tag
+only warns. Shipping on data with a deletion date is a dated failure, whereas
+"this model may now carry restricted data" is a compliance question for a human
+rather than something a gate should settle alone.
 
 The policy engine will not let a `PROBABLE` finding block a deploy unless a team
 sets `allow_probable_block: true` deliberately. A distribution moving is evidence

@@ -1,0 +1,24 @@
+🔴 BLOCK — fraud_detector_v3 (1 blocking, 1 warning)
+
+┌───────────────────────────────────────── BLOCKING ─────────────────────────────────────────┐
+│ Feature `transaction_velocity_7d` — Dataset transactions.raw is now marked deprecated —    │
+│ Superseded by transactions.v2; deletion scheduled.                                         │
+│                                                                                            │
+│ transactions.raw (@data_eng_tom)                                                           │
+│ └── staging.transactions_clean [DownstreamOf]                                              │
+│     └── transaction_velocity_7d [DerivedFrom]                                              │
+│         └── fraud_detector_v3 [Consumes]                                                   │
+│                                                                                            │
+│   Confidence: CERTAIN (asset deprecated)                                                   │
+│                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────── WARNING ──────────────────────────────────────────┐
+│ Feature `transaction_velocity_7d` — PII was applied to staging.transactions_clean, which   │
+│ feeds transaction_velocity_7d; sensitive data now reaches this model                       │
+│   origin: staging.transactions_clean (2 hops)                                              │
+│   Confidence: CERTAIN (new sensitive tag)                                                  │
+│                                                                                            │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  statistics: Compared statistics on 3/14 columns across 3/6 assets.

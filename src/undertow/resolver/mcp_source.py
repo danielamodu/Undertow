@@ -60,14 +60,51 @@ class McpLineageSource(LineageSource):
     exists to prevent.
     """
 
-    def __init__(self, tool_executor: Callable[[str, dict[str, Any]], Any]) -> None:
+    def __init__(
+        self,
+        tool_executor: Callable[[str, dict[str, Any]], Any],
+        *,
+        profile_reader: Any = None,
+    ) -> None:
         if tool_executor is None:
             raise ValueError(
                 "McpLineageSource requires a tool executor. Construct one with "
                 "`McpToolExecutor()` (as a context manager) and pass it in."
             )
         self._executor = tool_executor
+        self._profiles = profile_reader
         self.connection_error: str | None = None
+
+    @property
+    def available_tools(self) -> frozenset[str] | None:
+        """What the connected server advertised, or `None` if unknowable.
+
+        Populated from `tools/list` at connect time. Anything that hands a tool
+        list to a model has to consult this rather than a compile-time constant:
+        `search_documents` is documented, is in mcp-server-datahub's own surface,
+        and is simply absent from the OSS v1.7.0 handshake. Offering it burns a
+        turn on a tool error that teaches the model nothing.
+        """
+        return getattr(self._executor, "available_tools", None) or None
+
+    # -- statistics --------------------------------------------------------
+
+    def get_latest_profile(self, urn: str) -> dict[str, Any] | None:
+        """The latest `datasetProfile`, via the timeseries API rather than MCP.
+
+        The OSS MCP server exposes eight read-only tools and none of them
+        returns statistics, so there is nothing to call here. Without a
+        `profile_reader` this source resolves every asset unprofiled — which is
+        what silently left `--mcp` with no drift detection while the SDK path
+        had it, two verdicts on one graph.
+
+        Callers that want statistics pass a reader; those that do not get
+        honest "cannot assess" coverage rather than a false clean.
+        """
+        if self._profiles is None:
+            return None
+        profile: dict[str, Any] | None = self._profiles.get_latest_profile(urn)
+        return profile
 
     # -- entities ----------------------------------------------------------
 

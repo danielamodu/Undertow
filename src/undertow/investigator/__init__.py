@@ -8,6 +8,7 @@ from undertow.investigator.investigator import (
     INVESTIGATION_TOOLS,
     InvestigationUnavailable,
     investigate_findings,
+    tools_for,
 )
 from undertow.investigator.investigator import (
     # Qualified at the package boundary: `unavailable_reason` is unambiguous
@@ -18,6 +19,7 @@ from undertow.investigator.investigator import (
 __all__ = [
     "investigate_findings",
     "investigation_unavailable_reason",
+    "tools_for",
     "InvestigationUnavailable",
     "INVESTIGATION_TOOLS",
 ]

@@ -150,6 +150,24 @@ def unavailable_reason() -> str | None:
     return None
 
 
+def tools_for(source: Any) -> list[dict[str, Any]]:
+    """The subset of `INVESTIGATION_TOOLS` the connected server actually offers.
+
+    Not every documented tool exists on every build. `search_documents` is in
+    mcp-server-datahub's published surface and absent from the OSS v1.7.0
+    handshake — offering it anyway costs a turn on a tool error that teaches the
+    model nothing, and a bounded loop has few turns to spare.
+
+    When a source cannot say what it has, every tool is offered and the dispatch
+    layer reports failures individually. That is the older, worse behaviour, but
+    it is the only correct one without a handshake to consult.
+    """
+    available = getattr(source, "available_tools", None)
+    if not available:
+        return list(INVESTIGATION_TOOLS)
+    return [tool for tool in INVESTIGATION_TOOLS if tool["name"] in available]
+
+
 def investigate_findings(
     findings: list[Finding],
     source: Any,
@@ -236,7 +254,7 @@ def _investigate_one(
             system=_SYSTEM,
             thinking={"type": "adaptive"},
             output_config={"effort": "low"},
-            tools=INVESTIGATION_TOOLS,
+            tools=tools_for(source),
             messages=messages,
         )
 

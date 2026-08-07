@@ -179,6 +179,7 @@ make reset
 | `make baseline` | Capture the approved state of both models |
 | `make break` | Drop `transaction_amount` from `transactions.raw` — a `CERTAIN` change |
 | `make break-stats` | Shift the distribution of `amount` by 4.8σ — a `PROBABLE` change |
+| `make break-governance` | Deprecate the raw table and tag staging as PII |
 | `make check-warn` | Gate after drift: WARN, exit `0`. Statistics do not stop a deploy |
 | `make check` | Gate the fraud model |
 | `make blast-radius` | Gate every model downstream of the change |
@@ -294,7 +295,9 @@ Ships with [`references/verdicts.md`](skills/undertow-deploy-gate/references/ver
 
 Undertow holds no database of its own. DataHub is the source of truth for topology *and* the store for verdict history — including the baseline, which means a wiped CI runner can still tell you what changed since the last approved deploy.
 
-- **Graph Traversal via the MCP Server**: A real MCP client (`--mcp`) spawns `mcp_server_datahub` over stdio, keeps one initialised session alive for the whole run, and calls `get_entities`, `get_lineage`, and `list_schema_fields`. Tool names are checked against the server's own `tools/list` at connect time, so a signature drift fails loudly instead of silently resolving to nothing. Verified against mcp-server-datahub 0.6.0, whose OSS build exposes eight read-only tools.
+- **Graph Traversal via the MCP Server**: A real MCP client (`--mcp`) spawns `mcp_server_datahub` over stdio, keeps one initialised session alive for the whole run, and calls `get_entities`, `get_lineage`, and `list_schema_fields`. Tool names are checked against the server's own `tools/list` at connect time, so a signature drift fails loudly instead of silently resolving to nothing.
+
+  Verified against mcp-server-datahub 0.6.0 on DataHub OSS v1.7.0, which advertises **six** read-only tools: `get_entities`, `get_lineage`, `get_lineage_paths_between`, `list_schema_fields`, `search`, and `get_dataset_queries`. `search_documents` and `grep_documents` are documented but absent from that handshake, which is why the investigation loop intersects its tool list with `available_tools` rather than trusting a compile-time constant — offering a model a tool that does not exist costs a turn and teaches it nothing.
 - **SDK fallback**: `SdkLineageSource` covers environments without the MCP server. Both paths resolve the same graph and produce the same verdict.
 - **Write-Back Metadata**:
   - `assertionInfo` (CUSTOM / EXTERNAL) & `assertionRunEvent` (SUCCESS / FAILURE) on root cause datasets.
@@ -394,8 +397,6 @@ undertow history --model "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_de
 ```
 
 A CI runner wiped between builds still knows what the last twenty deploys looked like. The assertion URN is derived from the model URN rather than stored, so the same model always appends to one series — and the same rows are visible in DataHub's own assertion timeline, since it is a native assertion rather than something Undertow invented.
-
-*Blast radius, verdict history, and the pre-merge check were all on the V2 list. What remains there: continuous watch mode over DataHub's Kafka events, and Slack/webhook delivery.*
 
 ---
 

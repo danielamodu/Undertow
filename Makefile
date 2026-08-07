@@ -25,6 +25,10 @@ break:
 break-stats:
 	python scripts/drift_stats.py
 
+# The third differ. Nothing about the data changed — the policy around it did.
+break-governance:
+	python scripts/break_governance.py
+
 # WARN exits 0, so this target succeeds. `--fail-on-warn` is the opt-in.
 check-warn:
 	undertow check --model "$(FRAUD)"
@@ -75,6 +79,6 @@ lint:
 	ruff check src/ tests/ scripts/
 	mypy src/
 
-.PHONY: install quickstart seed baseline break break-stats reset check check-churn \
-        check-warn check-write blast-radius impact history check-mcp check-investigate \
-        demo test lint
+.PHONY: install quickstart seed baseline break break-stats break-governance reset \
+        check check-churn check-warn check-write blast-radius impact history check-mcp \
+        check-investigate demo test lint

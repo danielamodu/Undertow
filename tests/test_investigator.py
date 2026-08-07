@@ -15,7 +15,12 @@ from typing import Any
 import pytest
 
 from undertow.engine import evaluate
-from undertow.investigator import investigate_findings, investigation_unavailable_reason
+from undertow.investigator import (
+    INVESTIGATION_TOOLS,
+    investigate_findings,
+    investigation_unavailable_reason,
+    tools_for,
+)
 from undertow.models import (
     AttributionHop,
     AttributionPath,
@@ -352,3 +357,51 @@ def test_no_callback_still_returns_findings(monkeypatch: pytest.MonkeyPatch) -> 
     findings = [dropped_column()]
 
     assert investigate_findings(findings, StubSource()) == findings
+
+
+# --------------------------------------------------------------------------
+# Only offering tools the server has
+# --------------------------------------------------------------------------
+#
+# `search_documents` is in mcp-server-datahub's documented surface and absent
+# from the OSS v1.7.0 handshake. Offering it burned a turn of a six-turn budget
+# on a tool error that taught the model nothing.
+
+
+def test_tools_are_filtered_to_what_the_server_advertises() -> None:
+    class Connected(StubSource):
+        available_tools = frozenset({"search", "get_lineage"})
+
+    offered = {tool["name"] for tool in tools_for(Connected())}
+
+    assert offered == {"search", "get_lineage"}
+
+
+def test_a_source_that_cannot_say_gets_the_full_list() -> None:
+    """No handshake to consult means no basis for narrowing."""
+    assert len(tools_for(StubSource())) == len(INVESTIGATION_TOOLS)
+
+
+def test_an_empty_tool_list_is_treated_as_unknown_not_as_none_available() -> None:
+    """An empty frozenset is what an unconnected executor reports."""
+
+    class NotYetConnected(StubSource):
+        available_tools = frozenset()
+
+    assert len(tools_for(NotYetConnected())) == len(INVESTIGATION_TOOLS)
+
+
+def test_every_offered_tool_can_actually_be_dispatched() -> None:
+    """The names in the tool list must match the branches in `_run_tool`."""
+    from undertow.investigator.investigator import _run_tool
+
+    for tool in INVESTIGATION_TOOLS:
+        result = _run_tool(StubSource(), tool["name"], _sample_args(tool))
+        assert result.get("content") != f"Unknown tool: {tool['name']}"
+
+
+def _sample_args(tool: dict[str, Any]) -> dict[str, Any]:
+    args: dict[str, Any] = {}
+    for name in tool["input_schema"].get("required", []):
+        args[name] = False if name == "upstream" else "x"
+    return args

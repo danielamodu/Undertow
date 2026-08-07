@@ -47,9 +47,15 @@ DEFAULT_TIMEOUT_SEC = 60.0
 # Override with UNDERTOW_MCP_STARTUP_TIMEOUT for slower machines.
 DEFAULT_STARTUP_TIMEOUT_SEC = float(os.environ.get("UNDERTOW_MCP_STARTUP_TIMEOUT", "60"))
 
-# The OSS tool surface, as reported by tools/list on mcp-server-datahub 0.6.0.
-# Kept here so a drift between what Undertow expects and what the server offers
-# is reported as a named mismatch rather than a runtime TypeError.
+# The OSS tool surface, as reported by tools/list on mcp-server-datahub 0.6.0
+# against DataHub OSS v1.7.0. Kept here so a drift between what Undertow expects
+# and what the server offers is reported as a named mismatch rather than a
+# runtime TypeError.
+#
+# Six, not eight. `search_documents` and `grep_documents` are documented but do
+# not appear on this build's tools/list, and calling one fails. Anything that
+# offers tools to a model has to intersect its list with `available_tools` from
+# the live handshake rather than trusting this constant — see the investigator.
 OSS_TOOLS: frozenset[str] = frozenset(
     {
         "get_entities",
@@ -58,10 +64,12 @@ OSS_TOOLS: frozenset[str] = frozenset(
         "list_schema_fields",
         "search",
         "get_dataset_queries",
-        "search_documents",
-        "grep_documents",
     }
 )
+
+# Present in some builds and documented, but absent from OSS v1.7.0's handshake.
+# Named rather than deleted so their absence stays a known fact.
+OPTIONAL_TOOLS: frozenset[str] = frozenset({"search_documents", "grep_documents"})
 
 
 class McpError(RuntimeError):

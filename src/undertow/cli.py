@@ -45,6 +45,7 @@ from undertow.resolver import (
     resolve_footprint,
 )
 from undertow.resolver.base import LineageSource
+from undertow.resolver.profiles import TimeseriesProfileReader
 
 # The verdict box is drawn with box-drawing characters and the report carries
 # owner handles, so a console that cannot encode UTF-8 turns a BLOCK into a
@@ -104,7 +105,13 @@ def _lineage_source(use_mcp: bool) -> Iterator[LineageSource]:
         raise SystemExit(EXIT_ERROR) from exc
 
     try:
-        yield McpLineageSource(executor)
+        # Statistics are not on the MCP tool surface, so they come from the
+        # timeseries API. Without this the MCP path resolves every asset
+        # unprofiled and disagrees with the SDK path on the same graph.
+        yield McpLineageSource(
+            executor,
+            profile_reader=TimeseriesProfileReader(gms_url=gms_url, token=token),
+        )
     finally:
         executor.close()
 
@@ -541,7 +548,7 @@ def check(
     if use_investigator and not use_mcp:
         err_console.print(
             "[yellow]--investigate requires --mcp[/yellow] — the investigation tools "
-            "(get_dataset_queries, search_documents, …) exist only on the DataHub MCP "
+            "(get_dataset_queries, search, get_lineage) exist only on the DataHub MCP "
             "server. Continuing without investigation."
         )
         use_investigator = False

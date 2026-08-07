@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from datahub.metadata.schema_classes import DatasetProfileClass
-
 from undertow.resolver.base import (
     LineageEdge,
     LineageNode,
@@ -17,6 +15,7 @@ from undertow.resolver.base import (
     SchemaFieldInfo,
     parse_entity_type,
 )
+from undertow.resolver.profiles import TimeseriesProfileReader
 
 
 class SdkLineageSource(LineageSource):
@@ -39,6 +38,7 @@ class SdkLineageSource(LineageSource):
         # the verdict comes back CLEAR — a green light produced by a blind check.
         self.connection_error: str | None = None
         self.graph: Any | None = graph
+        self._profiles = TimeseriesProfileReader(gms_url=gms_url, token=token)
         if graph is None:
             try:
                 from datahub.ingestion.graph.client import DataHubGraph, DataHubGraphConfig
@@ -81,43 +81,12 @@ class SdkLineageSource(LineageSource):
     def get_latest_profile(self, urn: str) -> dict[str, Any] | None:
         """The most recent `datasetProfile`, read off the timeseries API.
 
-        Timeseries aspects do not live on the entity snapshot. `get_entity_raw`
-        and `get_entity_semityped` return versioned aspects only, so a profile
-        emitted by an ingestion run is simply absent from everything the rest of
-        the resolver looks at.
-
-        That gap silently disabled the entire statistical differ against a real
-        DataHub: every asset resolved with `profile=None`, every statistical
-        comparison was skipped, and the verdict came back clean because nothing
-        had been examined. The unit tests did not catch it because they hand the
-        resolver synthetic aspects with `datasetProfile` already inlined — the
-        one shape a live GMS never produces.
-
-        Returns `None` when the asset has no profile, which is a normal state:
-        profiling is opt-in per source. `profile_coverage` turns that into an
-        explicit "could not assess" rather than a silent pass.
+        Timeseries aspects do not live on the entity snapshot, so a profile
+        emitted by an ingestion run is absent from everything else the resolver
+        looks at. Shared with the MCP source — see `resolver/profiles.py` for
+        why it is not a method on either of them.
         """
-        if self.graph is None:
-            return None
-
-        try:
-            rows = self.graph.get_timeseries_values(
-                entity_urn=urn,
-                aspect_type=DatasetProfileClass,
-                filter={},
-                limit=1,
-            )
-        except Exception:
-            # Profiles are an enrichment. Failing to read one must not fail a
-            # gate — but it must not look like a clean profile either, and
-            # returning None is what keeps coverage honest.
-            return None
-
-        if not rows:
-            return None
-
-        latest = rows[0]
-        return latest.to_obj() if hasattr(latest, "to_obj") else None
+        return self._profiles.get_latest_profile(urn)
 
     def get_lineage(
         self, urn: str, direction: str = "UPSTREAM", hops: int = 1
