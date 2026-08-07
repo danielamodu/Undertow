@@ -213,7 +213,38 @@ Exit code 2 has a small number of causes:
 Report the cause. Do not retry without `--mcp` and present the result as if the
 first run had succeeded, and do not describe a code 2 as "clear".
 
-## Step 8 — Verify a write-back landed
+## Step 8 — Check whether this has happened before
+
+A model that has blocked five times this week has a different problem from one
+blocking for the first time. The history is in the catalog, not in a log file:
+
+```bash
+undertow history --model "<MODEL_URN>"
+```
+
+Every `--write-back` run appends to a native DataHub assertion, so this survives
+a wiped CI runner. An empty result means nothing has been written back yet — not
+that every previous run passed. Keep those apart when you report.
+
+## Step 9 — When the user is changing the SQL, check before they merge
+
+If the request is about a *proposed* change rather than a failing deploy — "what
+happens if I drop this column", a PR under review — do not wait for the deploy
+gate. Check the statement directly:
+
+```bash
+undertow impact path/to/model.sql
+```
+
+This parses the proposed SQL, compares the columns it would produce against the
+columns the table has in DataHub today, and walks downstream from anything that
+disappears. It answers the question before the damage rather than after.
+
+It exits `0` even when models are affected, because a column removal may be
+entirely intended — the exit code is not the answer here, the report is. That is
+the opposite of `check`, so do not carry the habit across.
+
+## Step 10 — Verify a write-back landed
 
 If you passed `--write-back`, the report states whether the write actually
 happened — it is printed from the result, not from the flag. Confirm in the
@@ -238,6 +269,8 @@ Expect `undertow_risk_verdict`, `undertow_last_checked`, and a
 ## Common mistakes
 
 1. **Treating exit 2 as a pass.** It is the opposite: the gate could not see.
+1. **Reading `impact`'s exit code as a verdict.** It exits `0` by design; the
+   report is the answer. Only `check` encodes its verdict in the exit status.
 2. **Re-running with a laxer policy after a BLOCK.** That is not investigation.
 3. **Reporting a `PROBABLE` statistical finding as a certainty.** Drift is
    evidence something may be wrong, not proof that it is.

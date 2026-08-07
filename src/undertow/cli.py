@@ -28,7 +28,7 @@ from undertow.attributor import attribute_findings
 from undertow.differ import diff_snapshots, profile_coverage
 from undertow.engine import PolicyViolation, evaluate, validate_policy
 from undertow.investigator import investigate_findings, investigation_unavailable_reason
-from undertow.models import FindingKind, UndertowSnapshot
+from undertow.models import FindingKind, UndertowSnapshot, short_urn
 from undertow.narrator import generate_narrative_detailed
 from undertow.policy import Policy
 from undertow.reporter import (
@@ -337,6 +337,150 @@ def baseline(model_urn: str, config_path: str, use_mcp: bool) -> None:
     except Exception as exc:
         err_console.print(f"[red]Failed to capture baseline:[/red] {exc}")
         raise SystemExit(EXIT_ERROR) from exc
+
+
+@main.command()
+@click.argument("sql_files", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option(
+    "--platform", default="snowflake", show_default=True, help="Data platform for URN resolution."
+)
+@click.option("--env", default="PROD", show_default=True, help="DataHub environment.")
+@click.option(
+    "--fail-on-impact",
+    is_flag=True,
+    default=False,
+    help="Exit 1 when a removed column reaches a model. Off by default: a PR check informs.",
+)
+@click.option("--max-hops", default=6, show_default=True, help="How far downstream to walk.")
+def impact(
+    sql_files: tuple[str, ...], platform: str, env: str, fail_on_impact: bool, max_hops: int
+) -> None:
+    """Check changed SQL against the catalog, before it merges.
+
+    Parses each statement, compares the columns it would produce against the
+    columns the table has in DataHub today, and walks downstream from anything
+    that disappears. Run it on the SQL a pull request touches.
+    """
+    from datahub.ingestion.graph.client import DataHubGraph, DataHubGraphConfig
+    from datahub.sql_parsing.schema_resolver import SchemaResolver
+
+    from undertow.impact import analyse_sql, format_pr_comment
+    from undertow.reporter.github import PROJECT_URL
+
+    gms_url = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080")
+    token = os.environ.get("DATAHUB_GMS_TOKEN")
+
+    try:
+        graph = DataHubGraph(
+            DataHubGraphConfig(server=gms_url, token=token, timeout_sec=30)
+        )
+        # Backed by the live graph, so the parse binds against the schemas the
+        # catalog actually holds rather than a second description of them.
+        resolver = SchemaResolver(platform=platform, env=env, graph=graph)
+    except Exception as exc:
+        err_console.print(f"[red]Cannot reach DataHub:[/red] {exc}")
+        raise SystemExit(EXIT_ERROR) from exc
+
+    source = SdkLineageSource(gms_url=gms_url, token=token)
+    if getattr(source, "connection_error", None):
+        err_console.print(f"[red]Cannot reach DataHub:[/red] {source.connection_error}")
+        raise SystemExit(EXIT_ERROR)
+
+    impacts = []
+    for path in sql_files:
+        try:
+            result = analyse_sql(
+                path, source=source, schema_resolver=resolver, max_hops=max_hops
+            )
+        except Exception as exc:
+            err_console.print(f"[red]Failed to analyse {path}:[/red] {exc}")
+            raise SystemExit(EXIT_ERROR) from exc
+        if result is not None:
+            impacts.append(result)
+
+    if not impacts:
+        console.print("[green]No table-building statements in the given files.[/green]")
+        raise SystemExit(EXIT_OK)
+
+    breaking = [i for i in impacts if i.is_breaking]
+
+    for item in impacts:
+        if item.parse_error:
+            err_console.print(f"[yellow]{item.sql_file}:[/yellow] {item.parse_error}")
+            continue
+        if not item.dropped_columns:
+            console.print(f"[green]{item.table_name}[/green] — no columns removed")
+            continue
+
+        dropped = ", ".join(item.dropped_columns)
+        colour = "red" if item.impacted else "yellow"
+        console.print(f"[{colour}]{item.table_name}[/{colour}] — removes {dropped}")
+        for model in item.impacted:
+            owners = ", ".join(f"@{short_urn(o)}" for o in model.owners) or "unassigned"
+            console.print(f"    reaches {model.name} ({owners})")
+            console.print(f"      via {model.route()}", style="dim")
+
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path, "a", encoding="utf-8") as f:
+            f.write(format_pr_comment(impacts, project_url=PROJECT_URL) + "\n")
+
+    # Informational by default. This check knows a column is going away; it does
+    # not know whether that is intended, and a PR check that blocks on every
+    # deliberate column removal gets switched off within a week.
+    raise SystemExit(EXIT_BLOCK if (breaking and fail_on_impact) else EXIT_OK)
+
+
+@main.command()
+@click.option("--model", "model_urn", required=True, help="mlModel URN to inspect.")
+@click.option("--limit", default=20, show_default=True, help="Most recent runs to show.")
+def history(model_urn: str, limit: int) -> None:
+    """Show recorded verdicts for a model, newest first.
+
+    Read from the native DataHub assertion Undertow writes to. Undertow keeps no
+    database of its own — this is the catalog's own record, so a wiped CI runner
+    still knows what the last deploys looked like.
+    """
+    from datahub.ingestion.graph.client import DataHubGraph, DataHubGraphConfig
+
+    from undertow.history import assertion_urn_for, read_history, summarise
+
+    gms_url = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080")
+    try:
+        graph = DataHubGraph(
+            DataHubGraphConfig(
+                server=gms_url, token=os.environ.get("DATAHUB_GMS_TOKEN"), timeout_sec=15
+            )
+        )
+        runs = read_history(model_urn, graph=graph, limit=limit)
+    except Exception as exc:
+        err_console.print(f"[red]Could not read verdict history:[/red] {exc}")
+        raise SystemExit(EXIT_ERROR) from exc
+
+    table = Table(title=f"Verdict history — {model_urn.split(',')[-2]}", header_style="bold")
+    table.add_column("Checked at")
+    table.add_column("Verdict")
+    table.add_column("Blocking", justify="right")
+    table.add_column("Warning", justify="right")
+    table.add_column("Assets", justify="right")
+    table.add_column("Exit", justify="right")
+
+    for run in runs:
+        colour = {"BLOCK": "red", "WARN": "yellow", "CLEAR": "green"}.get(run.severity, "dim")
+        table.add_row(
+            run.checked_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            f"[{colour}]{run.severity or run.result}[/{colour}]",
+            str(run.blocking),
+            str(run.warning),
+            str(run.assets_checked),
+            str(run.exit_code()),
+        )
+
+    if runs:
+        console.print(table)
+    console.print(f"  {summarise(runs)}", style="dim")
+    console.print(f"  assertion: {assertion_urn_for(model_urn)}", style="dim")
+    raise SystemExit(EXIT_OK)
 
 
 @main.command()

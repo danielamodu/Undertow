@@ -19,6 +19,8 @@ person who caused it.
 - **Blast radius** — every model a schema change reaches, not just the one being deployed
 - **Baseline approval** — accept an intentional change deliberately, with an owner
 - **Owner notification** — draft the message to the engineer whose change caused it
+- **Pre-merge check** — what a proposed SQL change breaks, before it lands
+- **Verdict history** — has this model blocked before, and how often
 
 ## Usage
 

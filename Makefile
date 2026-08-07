@@ -48,6 +48,14 @@ blast-radius:
 	-undertow check --model "$(FRAUD)"
 	-undertow check --model "$(CHURN)"
 
+# The pre-merge check: what does this SQL change break, before it merges?
+impact:
+	undertow impact examples/pr-drops-amount.sql
+
+# Every recorded verdict for the model, read back out of DataHub. No local state.
+history:
+	undertow history --model "$(FRAUD)"
+
 # Uses the DataHub MCP server for reads instead of the Python SDK.
 check-mcp:
 	undertow check --model "$(FRAUD)" --mcp
@@ -68,4 +76,5 @@ lint:
 	mypy src/
 
 .PHONY: install quickstart seed baseline break break-stats reset check check-churn \
-        check-warn check-write blast-radius check-mcp check-investigate demo test lint
+        check-warn check-write blast-radius impact history check-mcp check-investigate \
+        demo test lint

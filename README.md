@@ -183,6 +183,8 @@ make reset
 | `make check` | Gate the fraud model |
 | `make blast-radius` | Gate every model downstream of the change |
 | `make check-write` | Gate and write the verdict back to DataHub |
+| `make impact` | Check a proposed SQL change *before it merges* |
+| `make history` | Every recorded verdict, read back out of DataHub |
 | `make check-mcp` | Resolve lineage through the DataHub **MCP server** instead of the SDK |
 | `make check-investigate` | Add the agent investigation loop (needs `--mcp` and `ANTHROPIC_API_KEY`) |
 | `make reset` | Restore the graph |
@@ -346,14 +348,54 @@ Undertow implements that attribution framing against a lineage graph that alread
 
 ---
 
-## V2 Roadmap
+## Catching it before the merge
 
-- **Continuous Watch Mode**: Daemon process monitoring DataHub Kafka events for real-time upstream drift notifications.
-- **Slack & Webhook Integrations**: Instant alerts dispatched to dataset owners when an upstream change threatens a downstream model.
-- **Historical Verdict Timeline**: Historical risk trends rendered in DataHub's UI timeline.
-- **Automated Data PR Comments**: Bot comments posted directly on dbt/SQL pull requests modifying upstream schema definitions.
+`undertow check` runs at deploy time. By then the table has been rebuilt, the column is gone, and the ML team finds out by being blocked — while the engineer who removed it has moved on to something else.
 
-*Multi-model blast radius was on this list and is now shipped — see `make blast-radius`.*
+`undertow impact` runs earlier, on the pull request that changes the SQL:
+
+```bash
+undertow impact examples/pr-drops-amount.sql
+```
+
+```
+staging.transactions_clean — removes amount
+    reaches churn_predictor_v1 (@ml_eng_priya)
+      via customer_txn_volume → churn_predictor_v1
+    reaches fraud_detector_v3 (@ml_eng_alex)
+      via transaction_velocity_7d → fraud_detector_v3
+```
+
+It parses the proposed statement, compares the columns it *would* produce against the columns that table has in DataHub today, and walks downstream from anything that disappears. The result lands as a comment on the PR removing the column, addressed to the person removing it — see [`examples/github-pr-comment-upstream.md`](examples/github-pr-comment-upstream.md) and [`.github/workflows/upstream-pr-gate.yml`](.github/workflows/upstream-pr-gate.yml).
+
+Informational by default. The check knows a column is going away; it does not know whether that is intended, and a PR check that fails on every deliberate column removal gets switched off within a week. `--fail-on-impact` makes it blocking for teams who want that.
+
+---
+
+## Verdict history
+
+Undertow keeps no database. Every `--write-back` appends an `assertionRunEvent` to a native DataHub assertion, and because that is a *timeseries* aspect, runs accumulate rather than overwrite. The history is the catalog's:
+
+```bash
+undertow history --model "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+```
+
+```
+              Verdict history — fraud_detector_v3
+┌─────────────────────────┬─────────┬──────────┬─────────┬────────┬──────┐
+│ Checked at              │ Verdict │ Blocking │ Warning │ Assets │ Exit │
+├─────────────────────────┼─────────┼──────────┼─────────┼────────┼──────┤
+│ 2026-08-07 21:08:14 UTC │ BLOCK   │        1 │       0 │      6 │    1 │
+│ 2026-08-07 16:46:20 UTC │ BLOCK   │        1 │       0 │      6 │    1 │
+│ 2026-08-06 11:18:32 UTC │ BLOCK   │        1 │       0 │      5 │    1 │
+└─────────────────────────┴─────────┴──────────┴─────────┴────────┴──────┘
+  11 run(s) over 1 day(s), 11 blocked.
+  assertion: urn:li:assertion:c3e79c057400bc9ad701b995812a3f0d
+```
+
+A CI runner wiped between builds still knows what the last twenty deploys looked like. The assertion URN is derived from the model URN rather than stored, so the same model always appends to one series — and the same rows are visible in DataHub's own assertion timeline, since it is a native assertion rather than something Undertow invented.
+
+*Blast radius, verdict history, and the pre-merge check were all on the V2 list. What remains there: continuous watch mode over DataHub's Kafka events, and Slack/webhook delivery.*
 
 ---
 
