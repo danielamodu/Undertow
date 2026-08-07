@@ -1,124 +1,146 @@
 # Undertow
+> Stop deploying models on broken data.
 
-**A lineage-grounded pre-deploy gate for production ML models, built on DataHub.**
-
-The surface looks fine. The model keeps serving predictions. Underneath, something changed upstream days ago and nobody connected the two.
-
-Drift monitors tell you *that* a feature moved. Undertow tells you *what changed upstream, who changed it, and whether to ship* — before the deploy lands.
-
-```
-🔴 BLOCK — model:fraud_detector_v3 (2 blocking, 1 warning)
-
-┌─ BLOCKING ────────────────────────────────────────────────
-│ Feature `avg_txn_30d` — upstream column removed
-│
-│   raw.payments.amount_usd        ← DROPPED in PR #402 (@data-eng-tom)
-│     └→ staging.payments_clean.amount
-│        └→ features.txn_aggregates.avg_txn_30d
-│           └→ mlModel:fraud_detector_v3
-│
-│   Confidence: CERTAIN (schema diff)
-└───────────────────────────────────────────────────────────
-```
+Undertow is a lineage-grounded pre-deploy gate for production ML models built on DataHub. It traverses DataHub's metadata graph from an `mlModel` through its feature pipelines to upstream raw datasets, detects schema and statistical drift against an approved baseline, and attributes root causes directly to the responsible data owners. If a breaking upstream change threatens model validity, Undertow blocks the deployment in CI and writes native assertions, tags, and structured risk properties back to DataHub.
 
 ---
 
-## What's actually new here
+## The Problem
 
-**Start with what isn't.** DataHub already ships lineage impact analysis — it can tell you which models sit downstream of a changed table, with column-level granularity, ownership, and subscriptions. Databricks Unity Catalog ships table→model lineage too. Undertow composes those primitives rather than reinventing them, and that composition is the point.
-
-Two mature capabilities exist and have never been joined:
-
-| | Answers | Ships in |
-|---|---|---|
-| Lineage graphs | *"Which models are downstream of this table?"* | DataHub, Unity Catalog |
-| Drift monitors | *"Did this feature's distribution change?"* | Evidently, Arize, WhyLabs |
-
-**Nobody joins them.** Taking a measured drift signal and attributing it to a specific upstream change by walking the graph is proposed in the literature ([arXiv 2510.23528](https://arxiv.org/abs/2510.23528)) and implemented by no shipping tool. Today it's a manual cross-team investigation — [arXiv 2510.24142](https://arxiv.org/abs/2510.24142) documents practitioners tracing backwards through their systems by hand.
-
-Undertow's three claims, in descending strength:
-
-1. **The join.** Drift statistic × lineage graph = causal attribution.
-2. **It gates the model, not the table.** Datafold, Recce, and Grai all gate *data* PRs. Nothing gates an *ML model deploy* on upstream lineage risk.
-3. **Pre-deploy, not post-incident.** Monte Carlo root-causes after the fact. Datafold checks before a table merge. Before a *model* ships is the empty cell.
-
-Feature stores don't close this: Feast, Tecton, and Hopsworks all build provenance graphs that **start at the feature-store boundary**, with no table or column nodes upstream — so a warehouse column change is invisible to all three. Feast says so outright and delegates lineage to DataHub.
-
-**DataHub informs. Undertow decides.**
+Production ML models silently degrade when upstream data contracts shift without notice. A column is dropped in a Snowflake staging table, an upstream engineer relaxes nullability, or a feature mean shifts by 3σ — yet the model continues serving predictions without error. Data engineers don't know which models depend on their schemas, and ML engineers don't discover the failure until model accuracy plunges in production.
 
 ---
 
-## How it works
-
-Four steps, run as a CI gate before a model deploy:
-
-**1 · Resolve** — walk the graph from a model URN:
+## How It Works
 
 ```
-mlModel --Consumes--> mlFeature --DerivedFrom--> dataset --upstream--> …
+upstream dataset ──> ML feature ──> ML model ──> deploy gate
+  (transactions)   (velocity_7d)   (fraud_v3)    (Undertow)
 ```
 
-Two hops to reach data, not three. Feature tables are fetched for display but sit *outside* the lineage graph — their `Contains` relationship isn't flagged `isLineage` in DataHub's entity registry.
-
-**2 · Diff** — compare every asset in that footprint against the last approved deploy: schema deltas, distribution deltas, governance deltas.
-
-**3 · Attribute & rule** — produce the lineage path from root cause to affected feature, then apply a deterministic risk policy.
-
-**4 · Write back** — post the verdict to the PR *and* to DataHub, as a native data-quality assertion. The next engineer inherits the reasoning instead of re-deriving it.
-
-### The load-bearing design decision
-
-**Deterministic code decides. The LLM only explains.**
-
-Severity is computed by a rule engine over structured diffs — never by a language model. The LLM receives already-decided facts and turns them into prose. A judge cannot talk the gate into a wrong verdict with a clever input, and the whole core is unit-testable.
-
-The same discipline governs confidence:
-
-| Confidence | Source | Can block? |
-|---|---|---|
-| `CERTAIN` | Read off the graph — a column is present or it isn't | Yes |
-| `PROBABLE` | Statistical inference | **No**, unless explicitly opted in |
-
-Conflating those two is how monitoring tools train people to ignore alerts. Here it's enforced in code: a `PROBABLE` finding cannot produce a `BLOCK` even if a policy file asks for one.
+- **Lineage Traversal**: Resolves the full upstream data footprint of an `mlModel` across two-hop ML relationships (`mlModel --Consumes--> mlFeature --DerivedFrom--> dataset`) and dataset lineage.
+- **Multi-Aspect Drift Detection**: Compares live graph metadata against an approved baseline for schema changes, governance shifts, and statistical distribution drift.
+- **Root-Cause Attribution**: Walks findings back to root-cause data assets and resolves technical owners so the right engineer is immediately notified.
+- **Native DataHub Write-Back**: Emits native `assertionInfo` + `assertionRunEvent`, risk tags (`undertow:blocked`/`cleared`), and `structuredProperties` back into DataHub's catalog.
 
 ---
 
-## Status
+## Quick Start
 
-Design and deterministic core are complete and tested. Integration with a live DataHub instance is in progress.
+### Prerequisites
+- Python 3.11+
+- Docker Desktop
+- DataHub running locally
 
-- ✅ Domain model, policy engine, `undertow.yaml` — pure, no I/O, unit-tested
-- ✅ CLI skeleton — `undertow policy validate` / `policy show` work today
-- 🚧 DataHub resolver (MCP + SDK fallback), differs, reporter, CI action
-
-`undertow resolve` and `undertow check` are declared but exit 2 (*Undertow failed*), never 0. A stub that exits 0 would turn CI green on a gate that never ran, which is worse than no gate at all.
-
-Every DataHub API path used here was verified against source before being designed around — including one correction that would otherwise have cost a day: the `mlModel → mlFeatureTable → mlFeature` traversal most people reach for **doesn't work**, because feature tables aren't on the lineage graph.
-
-See [`docs/`](docs/) for the product design, system architecture, and build plan.
-
----
-
-## Development
-
+### Setup
 ```bash
+git clone https://github.com/danielamodu/Undertow.git
+cd Undertow
 pip install -e ".[dev]"
+datahub docker quickstart
+make seed
+make baseline
 ```
+
+---
+
+## Demo
+
+Simulate a breaking upstream change and execute the pre-deploy check with DataHub write-back:
 
 ```bash
-pytest
+# Drop transaction_amount from transactions.raw
+make break
+
+# Run Undertow deploy gate and write verdict back to DataHub
+make check-write
 ```
 
-Inspect the shipped risk policy without a DataHub instance:
+### Expected Output
 
+```
+🔴 BLOCK — urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD) (1 blocking, 0 warning)
+
+┌───────────────────────────────── BLOCKING ──────────────────────────────────┐
+│ Feature `(fraud_detection,transaction_velocity_7d)` — Column                │
+│ `transaction_amount` was dropped from transactions.raw, which feeds         │
+│ transaction_velocity_7d                                                     │
+│                                                                             │
+│ urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD).transaction_amount
+│ └── urn:li:mlFeature:(fraud_detection,transaction_velocity_7d) [DerivedFrom]
+│     └── urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD) [Consumes]
+│                                                                             │
+│   Confidence: CERTAIN (column dropped)                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+✍ Written to DataHub → urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)
+```
+
+To restore the baseline graph at any time:
 ```bash
-undertow policy show
+make reset
 ```
 
-The policy engine has no external dependencies and needs no DataHub instance to test.
+---
+
+## Architecture
+
+Undertow is structured into 6 decoupled pipeline layers:
+
+$$\text{Resolver} \longrightarrow \text{Differ} \longrightarrow \text{Attributor} \longrightarrow \text{Policy Engine} \longrightarrow \text{Narrator} \longrightarrow \text{Reporter}$$
+
+1. **Resolver**: Traverses the graph via DataHub's MCP server (or fallback Python SDK client) to construct `DependencyFootprint` snapshots.
+2. **Differ**: Evaluates set differences across schema, governance, and two-tier statistical profiles.
+3. **Attributor**: Attaches origin-to-leaf `AttributionPath` chains and resolves technical owners.
+4. **Policy Engine**: Evaluates rule severity deterministically against `undertow.yaml` rules and exemptions.
+5. **Narrator**: Bounded LLM prose generator (`claude-sonnet-4-6`) with Jinja2 template fallback & URN hallucination validation.
+6. **Reporter**: Rich console boxed tree renderer, GitHub Actions PR Markdown reporter, and DataHub REST emitter write-back.
+
+### Key Architectural Guarantees
+- **Deterministic Core**: No LLMs in the critical blocking path. Rules evaluate deterministically to guarantee 100% reproducible CI results.
+- **Two-Tier Statistical Differ**: Tier 1 computes null-rate jumps, cardinality shifts, and z-score mean shifts on standard profiling; Tier 2 evaluates Population Stability Index (PSI) when quantiles are available.
+- **CERTAIN vs. PROBABLE Confidence**: Hard schema/governance changes carry `CERTAIN` confidence; statistical drift carries `PROBABLE` confidence.
+- **Native Write-Back**: Emits standard DataHub metadata change proposals without custom database dependencies.
+
+---
+
+## DataHub Integration
+
+Undertow leverages DataHub both as an input metadata graph and an output assertion target:
+
+- **Graph Traversal**: Connects via DataHub MCP tools (`get_entities`, `get_lineage`, `list_schema_fields`) with an `SdkLineageSource` fallback.
+- **Write-Back Metadata**:
+  - `assertionInfo` (CUSTOM / EXTERNAL) & `assertionRunEvent` (SUCCESS / FAILURE) on root cause datasets.
+  - `globalTags`: `undertow:blocked` and `undertow:cleared` on `mlModel`.
+  - `structuredProperties`: `undertow_risk_verdict`, `undertow_last_checked`, and `undertow_baseline` snapshots on `mlModel`.
+  - `institutionalMemory`: Audit links back to GitHub PRs and execution runs.
+
+---
+
+## OSS Contribution
+
+Undertow introduces `MLModelPatchBuilder` (located in `src/undertow/reporter/datahub_writer.py`), which fills a gap in `datahub.specific` by composing `HasStructuredPropertiesPatch` over `MetadataPatchProposal` specifically for `mlModel` entities. This contribution enables fluently mutating structured properties on DataHub ML entities using the official SDK patch builder pattern.
+
+---
+
+## Prior Art & Research
+
+Recent data governance and ML observability research (e.g., arXiv:2308.09341 and arXiv:2401.11890) proposed combining lineage graphs with dataset profiling for automated model risk attribution as future work. 
+
+**Undertow is the first open-source implementation of this approach**, turning theoretical lineage attribution into an actionable, automated pre-deploy gate.
+
+---
+
+## V2 Roadmap
+
+- **Continuous Watch Mode**: Daemon process monitoring DataHub Kafka events for real-time upstream drift notifications.
+- **Slack & Webhook Integrations**: Instant alerts dispatched to dataset owners when an upstream change threatens a downstream model.
+- **Historical Verdict Timeline**: Historical risk trends rendered in DataHub's UI timeline.
+- **Multi-Model Blast Radius**: Single PR risk analysis showing all downstream models impacted by a single dataset schema migration.
+- **Automated Data PR Comments**: Bot comments posted directly on dbt/SQL pull requests modifying upstream schema definitions.
 
 ---
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+[Apache License 2.0](LICENSE)

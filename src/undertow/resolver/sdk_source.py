@@ -34,7 +34,7 @@ class SdkLineageSource(LineageSource):
         if graph is None:
             try:
                 from datahub.ingestion.graph.client import DataHubGraph, DataHubGraphConfig
-                self.graph = DataHubGraph(DataHubGraphConfig(server=gms_url, token=token))
+                self.graph = DataHubGraph(DataHubGraphConfig(server=gms_url, token=token, timeout_sec=2))
             except Exception:
                 self.graph = None
         else:

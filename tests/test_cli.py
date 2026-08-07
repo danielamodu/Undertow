@@ -13,6 +13,7 @@ returns "blocked" when it actually crashed teaches a team to ignore it.
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from click.testing import CliRunner
@@ -147,13 +148,27 @@ def test_policy_show_marks_overrides(runner: CliRunner, tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_resolve_command_runs_successfully(runner: CliRunner) -> None:
+def test_resolve_command_runs_successfully(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_source = MagicMock()
+    mock_source.get_entity.return_value = None
+    mock_source.get_entities.return_value = {}
+    mock_source.get_lineage.return_value = []
+    mock_source.list_schema_fields.return_value = []
+    monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
+
     result = runner.invoke(main, ["resolve", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"])
     assert result.exit_code == EXIT_OK
     assert "Footprint resolved" in output_of(result)
 
 
-def test_check_without_baseline_returns_warn(runner: CliRunner) -> None:
+def test_check_without_baseline_returns_warn(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
+    mock_source = MagicMock()
+    mock_source.get_entity.return_value = None
+    mock_source.get_entities.return_value = {}
+    mock_source.get_lineage.return_value = []
+    mock_source.list_schema_fields.return_value = []
+    monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
+
     result = runner.invoke(main, ["check", "--model", "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,nonexistent_model_xyz,PROD)"])
     assert result.exit_code == 1
     assert "No baseline found" in output_of(result)
