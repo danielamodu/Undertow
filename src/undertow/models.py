@@ -13,7 +13,7 @@ serious anything is, which is the whole point of the deterministic core.
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 _BASE = ConfigDict(frozen=True, protected_namespaces=())
 
 
-class Severity(str, enum.Enum):
+class Severity(enum.StrEnum):
     """What Undertow tells CI to do. Assigned by the policy engine, never by a differ."""
 
     CLEAR = "CLEAR"
@@ -46,7 +46,7 @@ _SEVERITY_RANK: dict[Severity, int] = {
 }
 
 
-class Confidence(str, enum.Enum):
+class Confidence(enum.StrEnum):
     """How far a finding is allowed to be trusted.
 
     CERTAIN is reserved for facts read straight out of the graph: a column is
@@ -61,7 +61,7 @@ class Confidence(str, enum.Enum):
     PROBABLE = "PROBABLE"
 
 
-class FindingKind(str, enum.Enum):
+class FindingKind(enum.StrEnum):
     """What changed. Grouped by the differ that produces it."""
 
     # Schema differ — read directly off `schemaMetadata`, therefore CERTAIN.
@@ -319,7 +319,7 @@ class UndertowSnapshot(BaseModel):
     model_config = _BASE
 
     model_urn: str
-    captured_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     assets: dict[str, AssetSnapshot] = Field(default_factory=dict)
     baseline_ref: str | None = None
 
@@ -380,7 +380,7 @@ class Verdict(BaseModel):
     severity: Severity
     ruled_findings: tuple[RuledFinding, ...] = ()
     baseline_ref: str | None = None
-    checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     # Assets walked but found unchanged. Surfaced because "we checked 8 datasets
     # and 12 features" is what makes a CLEAR verdict mean something.
     assets_checked: int = 0

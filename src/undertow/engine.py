@@ -14,7 +14,7 @@ Two invariants are enforced here rather than left to convention:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from undertow.models import (
     Confidence,
@@ -45,7 +45,7 @@ def evaluate(
     `now` is injected so exemption-expiry behaviour is testable without
     freezing the clock globally.
     """
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     ruled = [_rule_one(f, policy, now) for f in findings]
 

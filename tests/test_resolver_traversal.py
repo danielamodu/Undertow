@@ -109,17 +109,31 @@ class MockLineageSource(LineageSource):
                 ),
             ],
             STAGING_PAYMENTS: [
-                LineageEdge(source_urn=RAW_PAYMENTS, target_urn=STAGING_PAYMENTS, relationship="DownstreamOf"),
-                LineageEdge(source_urn=RAW_TXNS, target_urn=STAGING_PAYMENTS, relationship="DownstreamOf"),
+                LineageEdge(
+                    source_urn=RAW_PAYMENTS,
+                    target_urn=STAGING_PAYMENTS,
+                    relationship="DownstreamOf",
+                ),
+                LineageEdge(
+                    source_urn=RAW_TXNS,
+                    target_urn=STAGING_PAYMENTS,
+                    relationship="DownstreamOf",
+                ),
             ],
         }
         self.schema_map: dict[str, list[SchemaFieldInfo]] = {
             RAW_PAYMENTS: [
-                SchemaFieldInfo(field_path="amount_usd", data_type="number", native_type="DECIMAL(10,2)"),
-                SchemaFieldInfo(field_path="user_id", data_type="string", native_type="VARCHAR(64)"),
+                SchemaFieldInfo(
+                    field_path="amount_usd", data_type="number", native_type="DECIMAL(10,2)"
+                ),
+                SchemaFieldInfo(
+                    field_path="user_id", data_type="string", native_type="VARCHAR(64)"
+                ),
             ],
             STAGING_PAYMENTS: [
-                SchemaFieldInfo(field_path="amount", data_type="number", native_type="DECIMAL(10,2)"),
+                SchemaFieldInfo(
+                    field_path="amount", data_type="number", native_type="DECIMAL(10,2)"
+                ),
             ],
         }
 
@@ -161,7 +175,11 @@ def test_feature_tables_are_excluded_from_lineage_path() -> None:
     source = MockLineageSource()
 
     source.lineage_map[STAGING_PAYMENTS].append(
-        LineageEdge(source_urn=FEATURE_TABLE, target_urn=STAGING_PAYMENTS, relationship="DownstreamOf")
+        LineageEdge(
+            source_urn=FEATURE_TABLE,
+            target_urn=STAGING_PAYMENTS,
+            relationship="DownstreamOf",
+        )
     )
 
     footprint = resolve_footprint(MODEL_URN, source, max_hops=5)
@@ -178,7 +196,11 @@ def test_max_hops_is_respected() -> None:
 def test_cycle_guard_prevents_infinite_loops() -> None:
     source = MockLineageSource()
     source.lineage_map[RAW_PAYMENTS] = [
-        LineageEdge(source_urn=STAGING_PAYMENTS, target_urn=RAW_PAYMENTS, relationship="DownstreamOf")
+        LineageEdge(
+            source_urn=STAGING_PAYMENTS,
+            target_urn=RAW_PAYMENTS,
+            relationship="DownstreamOf",
+        )
     ]
 
     footprint = resolve_footprint(MODEL_URN, source, max_hops=10)

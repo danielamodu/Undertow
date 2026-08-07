@@ -14,8 +14,6 @@ Everything is a plain object. No DataHub, no network.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from undertow.differ.statistical import (

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -37,13 +38,15 @@ def render_console(
 
     if verdict.severity is Severity.CLEAR:
         header_text = Text(
-            f"{emoji} CLEAR — {model_name} ({verdict.assets_checked} assets checked, no material change)",
+            f"{emoji} CLEAR — {model_name} "
+            f"({verdict.assets_checked} assets checked, no material change)",
             style="bold green",
         )
     else:
         style_color = "bold red" if verdict.severity is Severity.BLOCK else "bold yellow"
         header_text = Text(
-            f"{emoji} {verdict.severity.value} — {model_name} ({n_block} blocking, {n_warn} warning)",
+            f"{emoji} {verdict.severity.value} — {model_name} "
+            f"({n_block} blocking, {n_warn} warning)",
             style=style_color,
         )
 
@@ -76,18 +79,21 @@ def render_console(
                 for hop in hops[1:]:
                     via_info = f" [{hop.via}]" if hop.via else ""
                     current_node = current_node.add(f"{hop.short_label()}{via_info}")
-                
-                # Render tree to string for panel
-                tree_console = Console(file=io.StringIO(), force_terminal=False)
+
+                # Render tree to string for panel. The buffer is held by name
+                # rather than read back off `Console.file`, which is typed as a
+                # plain `IO[str]` and so has no `getvalue()` to reach for.
+                buffer = io.StringIO()
+                tree_console = Console(file=buffer, force_terminal=False)
                 tree_console.print(tree)
-                tree_str = tree_console.file.getvalue()
-                blocking_content.append(tree_str + "\n")
+                blocking_content.append(buffer.getvalue() + "\n")
             else:
                 subj = finding.subject_column or finding.subject_urn
                 blocking_content.append(f"  Root: {subj}\n\n")
 
+            kind_label = finding.kind.value.lower().replace("_", " ")
             blocking_content.append(
-                f"  Confidence: {finding.confidence.value} ({finding.kind.value.lower().replace('_', ' ')})\n",
+                f"  Confidence: {finding.confidence.value} ({kind_label})\n",
                 style="dim",
             )
             if i < len(verdict.blocking) - 1:
@@ -123,8 +129,9 @@ def render_console(
                     f"  subject: {short_urn(finding.subject_urn)}\n", style="dim"
                 )
 
+            kind_label = finding.kind.value.lower().replace("_", " ")
             warning_content.append(
-                f"  Confidence: {finding.confidence.value} ({finding.kind.value.lower().replace('_', ' ')})\n",
+                f"  Confidence: {finding.confidence.value} ({kind_label})\n",
                 style="dim",
             )
             if i < len(verdict.warnings) - 1:

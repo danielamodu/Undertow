@@ -8,7 +8,7 @@ network, no fixtures beyond plain objects.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pydantic
 import pytest
@@ -25,7 +25,7 @@ from undertow.models import (
 )
 from undertow.policy import Exemption, Policy
 
-NOW = datetime(2026, 8, 3, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
 DATASET = "urn:li:dataset:(urn:li:dataPlatform:snowflake,raw.payments,PROD)"
 MODEL = "urn:li:mlModel:(urn:li:dataPlatform:mlflow,fraud_detector_v3,PROD)"
 FEATURE = "urn:li:mlFeature:(txn_aggregates,avg_txn_30d)"

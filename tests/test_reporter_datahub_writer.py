@@ -1,9 +1,10 @@
 """Tests for Undertow DataHub write-back reporter."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import datahub.metadata.schema_classes as models
+
 from undertow.models import (
     Finding,
     FindingKind,
@@ -44,7 +45,7 @@ def test_create_verdict_mcps_blocking() -> None:
         severity=Severity.BLOCK,
         ruled_findings=(ruled,),
         assets_checked=10,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     mcps = create_verdict_mcps(verdict, pr_url="https://github.com/org/repo/pull/12")
@@ -72,7 +73,7 @@ def test_create_verdict_mcps_cleared() -> None:
         severity=Severity.CLEAR,
         ruled_findings=(),
         assets_checked=10,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     mcps = create_verdict_mcps(verdict)
@@ -93,7 +94,7 @@ def test_write_verdict_to_datahub_emitter() -> None:
         severity=Severity.CLEAR,
         ruled_findings=(),
         assets_checked=5,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     mock_emitter = MagicMock()

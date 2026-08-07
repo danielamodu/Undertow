@@ -5,6 +5,7 @@ Provides bounded LLM narrative generation for verdicts with Jinja2 template fall
 
 from undertow.narrator.narrator import (
     generate_narrative,
+    generate_narrative_detailed,
     narrate,
     render_template,
     validate_narrative_urns,
@@ -12,6 +13,7 @@ from undertow.narrator.narrator import (
 
 __all__ = [
     "generate_narrative",
+    "generate_narrative_detailed",
     "narrate",
     "render_template",
     "validate_narrative_urns",

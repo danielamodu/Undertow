@@ -9,7 +9,7 @@ they have to say so in writing.
 from __future__ import annotations
 
 import fnmatch
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,7 @@ class Exemption(BaseModel):
         # A naive datetime compared against an aware `now` raises TypeError at
         # the worst possible moment. Normalise on the way in.
         if v is not None and v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
+            return v.replace(tzinfo=UTC)
         return v
 
     def matches(self, finding: Finding) -> bool:

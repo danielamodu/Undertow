@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 import datahub.emitter.mce_builder as builder
 import datahub.metadata.schema_classes as models
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
@@ -12,6 +14,10 @@ from datahub.specific.aspect_helpers.structured_properties import (
 )
 
 from undertow.models import Severity, Verdict
+
+# What `DatahubRestEmitter.emit_mcp` accepts. Full-aspect writes arrive as
+# wrappers; patch builders emit the raw proposal class.
+AnyProposal = MetadataChangeProposalWrapper | models.MetadataChangeProposalClass
 
 
 class WriteBackError(RuntimeError):
@@ -59,9 +65,16 @@ def create_verdict_mcps(
     verdict: Verdict,
     *,
     pr_url: str | None = None,
-) -> list[MetadataChangeProposalWrapper]:
-    """Build all MetadataChangeProposalWrappers representing write-back for a Verdict."""
-    mcps: list[MetadataChangeProposalWrapper] = []
+) -> list[AnyProposal]:
+    """Build every metadata change proposal representing write-back for a Verdict.
+
+    The list is deliberately heterogeneous. Full-aspect writes are
+    `MetadataChangeProposalWrapper`s; the structured-property writes come off
+    `MLModelPatchBuilder` as raw `MetadataChangeProposalClass` PATCHes, because
+    an UPSERT there would destroy properties written by anyone else. The emitter
+    accepts both, so the difference stops here.
+    """
+    mcps: list[AnyProposal] = []
     now_ms = int(verdict.checked_at.timestamp() * 1000)
 
     # 1. assertionInfo + assertionRunEvent (CUSTOM, EXTERNAL)
@@ -78,7 +91,10 @@ def create_verdict_mcps(
         customAssertion=models.CustomAssertionInfoClass(
             type="UNDERTOW_CHECK",
             entity=target_dataset_urn,
-            logic=f"Undertow evaluation over {verdict.assets_checked} upstream assets for model {verdict.model_urn}",
+            logic=(
+                f"Undertow evaluation over {verdict.assets_checked} upstream "
+                f"assets for model {verdict.model_urn}"
+            ),
         ),
         source=models.AssertionSourceClass(
             type=models.AssertionSourceTypeClass.EXTERNAL
@@ -153,7 +169,7 @@ def create_verdict_mcps(
     inst_memory = models.InstitutionalMemoryClass(
         elements=[
             models.InstitutionalMemoryMetadataClass(
-                url=pr_url or "https://github.com/undertow/check",
+                url=pr_url or "https://github.com/danielamodu/Undertow",
                 description=f"Undertow Verdict: {verdict.headline()}",
                 createStamp=models.AuditStampClass(
                     time=now_ms,
@@ -186,10 +202,10 @@ def ensure_verdict_property_defs(emitter: DatahubRestEmitter) -> None:
             entityTypes=["urn:li:entityType:datahub.mlModel"],
             cardinality="SINGLE",
         )
-        try:
+        # Best-effort: the definitions may already exist, and a failure here is
+        # not worth failing a gate over — the write that follows will report it.
+        with suppress(Exception):
             emitter.emit_mcp(MetadataChangeProposalWrapper(entityUrn=prop_urn, aspect=prop_def))
-        except Exception:
-            pass
 
 
 def write_verdict_to_datahub(
@@ -213,7 +229,11 @@ def write_verdict_to_datahub(
     for mcp in mcps:
         try:
             emitter.emit_mcp(mcp)
-            emitted_aspects.append(mcp.aspectName)
+            # `aspectName` is optional on the proposal classes, but every
+            # proposal built here carries one. Fall back rather than assert:
+            # a missing name is a reporting detail, not a reason to claim the
+            # write failed when it landed.
+            emitted_aspects.append(mcp.aspectName or "<unnamed aspect>")
         except Exception as exc:
             # Collected rather than swallowed. The caller decides how loud to be,
             # but it must not be able to report a write that did not happen.

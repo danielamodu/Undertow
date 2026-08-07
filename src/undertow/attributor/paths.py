@@ -9,7 +9,6 @@ and optional query evidence.
 from __future__ import annotations
 
 from undertow.models import (
-    AttributionHop,
     AttributionPath,
     DependencyFootprint,
     Finding,

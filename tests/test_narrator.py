@@ -1,6 +1,6 @@
 """Tests for Undertow LLM Narrator and Jinja2 fallback."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,6 +16,7 @@ from undertow.models import (
 )
 from undertow.narrator import (
     generate_narrative,
+    generate_narrative_detailed,
     render_template,
     validate_narrative_urns,
 )
@@ -56,7 +57,7 @@ def sample_verdict() -> Verdict:
         severity=Severity.BLOCK,
         ruled_findings=(ruled,),
         assets_checked=10,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
 
@@ -78,7 +79,8 @@ def test_urn_validation(sample_verdict: Verdict) -> None:
 
     valid_text = (
         "The model urn:li:mlModel:(urn:li:dataPlatform:mlflow,fraud_detector_v3,PROD) "
-        "is blocked due to changes in urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.payments_clean,PROD)."
+        "is blocked due to changes in "
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.payments_clean,PROD)."
     )
     assert validate_narrative_urns(valid_text, allowed) is True
 
@@ -89,25 +91,47 @@ def test_urn_validation(sample_verdict: Verdict) -> None:
     assert validate_narrative_urns(hallucinated_text, allowed) is False
 
 
-def test_generate_narrative_no_api_key(sample_verdict: Verdict) -> None:
+def test_generate_narrative_no_api_key(
+    sample_verdict: Verdict, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # When no API key is provided, should render template
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     output = generate_narrative(sample_verdict, api_key=None)
     assert "Undertow ML Deploy Verdict: BLOCK" in output
+
+
+def test_the_template_fallback_is_flagged_as_not_llm_written(
+    sample_verdict: Verdict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Callers must be able to tell prose from a re-render of the same findings.
+
+    Without this the PR comment prints every finding twice: once as a
+    "Narrative Summary" and once as the structured report beneath it.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    text, used_llm = generate_narrative_detailed(sample_verdict, api_key=None)
+
+    assert used_llm is False
+    assert text == render_template(sample_verdict)
 
 
 def test_generate_narrative_with_valid_mock_client(sample_verdict: Verdict) -> None:
     mock_client = MagicMock()
     mock_block = MagicMock()
     mock_block.text = (
-        "Deployment blocked for model urn:li:mlModel:(urn:li:dataPlatform:mlflow,fraud_detector_v3,PROD) "
-        "because column amount_usd was dropped in dataset urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.payments_clean,PROD)."
+        "Deployment blocked for model "
+        "urn:li:mlModel:(urn:li:dataPlatform:mlflow,fraud_detector_v3,PROD) "
+        "because column amount_usd was dropped in dataset "
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.payments_clean,PROD)."
     )
     mock_response = MagicMock()
     mock_response.content = [mock_block]
     mock_client.messages.create.return_value = mock_response
 
-    output = generate_narrative(sample_verdict, client=mock_client)
+    output, used_llm = generate_narrative_detailed(sample_verdict, client=mock_client)
     assert "Deployment blocked for model" in output
+    assert used_llm is True
     assert mock_client.messages.create.called
 
 

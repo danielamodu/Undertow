@@ -1,6 +1,6 @@
 """Tests for Undertow GitHub PR comment Markdown reporter."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from undertow.models import (
     AttributionHop,
@@ -11,7 +11,7 @@ from undertow.models import (
     Severity,
     Verdict,
 )
-from undertow.reporter.github import format_github_comment
+from undertow.reporter.github import PROJECT_URL, format_github_comment
 
 
 def test_format_github_comment_block() -> None:
@@ -48,7 +48,7 @@ def test_format_github_comment_block() -> None:
         severity=Severity.BLOCK,
         ruled_findings=(ruled,),
         assets_checked=10,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     narrative = "Custom narrative summary explaining why this PR is blocked."
@@ -61,7 +61,10 @@ def test_format_github_comment_block() -> None:
     assert "Blocking Findings" in output
     assert "COLUMN_DROPPED" in output
     assert "data-eng-tom" in output
-    assert "Lineage-Grounded ML Safety Gate" in output
+    # The footer link lands in every PR comment Undertow writes, so it has to
+    # point at a repository that exists. It previously pointed at a 404.
+    assert f"({PROJECT_URL})" in output
+    assert PROJECT_URL.startswith("https://github.com/")
 
 
 def test_format_github_comment_clear() -> None:
@@ -72,7 +75,7 @@ def test_format_github_comment_clear() -> None:
         severity=Severity.CLEAR,
         ruled_findings=(),
         assets_checked=8,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     output = format_github_comment(verdict)

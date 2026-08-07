@@ -191,9 +191,7 @@ def is_compatible_change(old: ColumnSnapshot, new: ColumnSnapshot) -> bool:
         # A column typed `null` was one the profiler could not infer; it being
         # given a real type is the schema improving, not breaking. The reverse
         # is an inference gap, not evidence of data loss.
-        if "null" in {old_logical, new_logical} or "unknown" in {old_logical, new_logical}:
-            return True
-        return False
+        return bool({old_logical, new_logical} & {"null", "unknown"})
 
     return _native_compatible(old.native_type, new.native_type)
 

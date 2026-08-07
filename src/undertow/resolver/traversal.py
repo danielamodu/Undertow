@@ -117,16 +117,24 @@ def resolve_footprint(
 
 
 def _extract_baseline_snapshot(node: LineageNode | None) -> UndertowSnapshot | None:
-    """Extract baseline UndertowSnapshot from model's structuredProperties or institutionalMemory."""
+    """Read the baseline snapshot out of structuredProperties, or institutionalMemory."""
     if not node or not node.aspects:
         return None
 
     # 1. Check structuredProperties
     sp_aspect = node.aspects.get("structuredProperties")
     if sp_aspect:
-        props = getattr(sp_aspect, "properties", None) or _get_dict_or_attr(sp_aspect, "properties") or []
+        props = (
+            getattr(sp_aspect, "properties", None)
+            or _get_dict_or_attr(sp_aspect, "properties")
+            or []
+        )
         for prop in props:
-            p_urn = getattr(prop, "propertyUrn", None) or _get_dict_or_attr(prop, "propertyUrn") or ""
+            p_urn = (
+                getattr(prop, "propertyUrn", None)
+                or _get_dict_or_attr(prop, "propertyUrn")
+                or ""
+            )
             values = getattr(prop, "values", None) or _get_dict_or_attr(prop, "values") or []
             if "undertow_baseline" in str(p_urn) and values:
                 raw_val = values[0]
@@ -147,9 +155,17 @@ def _extract_baseline_snapshot(node: LineageNode | None) -> UndertowSnapshot | N
     # 2. Check institutionalMemory fallback
     im_aspect = node.aspects.get("institutionalMemory")
     if im_aspect:
-        elements = getattr(im_aspect, "elements", None) or _get_dict_or_attr(im_aspect, "elements") or []
+        elements = (
+            getattr(im_aspect, "elements", None)
+            or _get_dict_or_attr(im_aspect, "elements")
+            or []
+        )
         for elem in elements:
-            desc = getattr(elem, "description", None) or _get_dict_or_attr(elem, "description") or ""
+            desc = (
+                getattr(elem, "description", None)
+                or _get_dict_or_attr(elem, "description")
+                or ""
+            )
             if "{" in desc and "model_urn" in desc:
                 json_str = desc[desc.find("{"):desc.rfind("}") + 1]
                 try:
@@ -226,10 +242,10 @@ def _build_attribution_hops(
     hops: list[AttributionHop] = []
 
     for idx, (urn, etype, _old_via) in enumerate(reversed_chain):
-        if idx == 0:
-            via = None
-        else:
-            via = reversed_chain[idx - 1][2]
+        # The relationship that reached a hop is recorded on the edge *into* it,
+        # so after reversing, each hop takes its predecessor's label. The root
+        # has no predecessor and therefore no `via`.
+        via = None if idx == 0 else reversed_chain[idx - 1][2]
         hops.append(AttributionHop(urn=urn, entity_type=etype, via=via))
 
     return tuple(hops)

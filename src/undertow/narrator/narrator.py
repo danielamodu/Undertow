@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from typing import Any
 
 import jinja2
 
@@ -19,9 +20,13 @@ _JINJA_TEMPLATE = """
 {% for rf in verdict.blocking %}
 - **{{ rf.finding.kind.value }}** on `{{ rf.finding.subject_column or rf.finding.subject_urn }}`
   - **Summary:** {{ rf.finding.summary }}
-  {% if rf.finding.affected_feature_urn %}- **Affected Feature:** `{{ rf.finding.affected_feature_urn }}`{% endif %}
-  {% if rf.finding.path and rf.finding.path.owners %}- **Owners:** {{ rf.finding.path.owners|join(', ') }}{% endif %}
-  {% if rf.exempted_by %}- **Exemption:** {{ rf.exempted_by }}{% if rf.exemption_expires %} (expires {{ rf.exemption_expires }}){% endif %}{% endif %}
+  {% if rf.finding.affected_feature_urn
+  %}- **Affected Feature:** `{{ rf.finding.affected_feature_urn }}`{% endif %}
+  {% if rf.finding.path and rf.finding.path.owners
+  %}- **Owners:** {{ rf.finding.path.owners|join(', ') }}{% endif %}
+  {% if rf.exempted_by
+  %}- **Exemption:** {{ rf.exempted_by }}{% if rf.exemption_expires
+  %} (expires {{ rf.exemption_expires }}){% endif %}{% endif %}
 {% endfor %}
 {% endif %}
 
@@ -30,8 +35,10 @@ _JINJA_TEMPLATE = """
 {% for rf in verdict.warnings %}
 - **{{ rf.finding.kind.value }}** on `{{ rf.finding.subject_column or rf.finding.subject_urn }}`
   - **Summary:** {{ rf.finding.summary }}
-  {% if rf.finding.affected_feature_urn %}- **Affected Feature:** `{{ rf.finding.affected_feature_urn }}`{% endif %}
-  {% if rf.finding.path and rf.finding.path.owners %}- **Owners:** {{ rf.finding.path.owners|join(', ') }}{% endif %}
+  {% if rf.finding.affected_feature_urn
+  %}- **Affected Feature:** `{{ rf.finding.affected_feature_urn }}`{% endif %}
+  {% if rf.finding.path and rf.finding.path.owners
+  %}- **Owners:** {{ rf.finding.path.owners|join(', ') }}{% endif %}
 {% endfor %}
 {% endif %}
 
@@ -71,17 +78,19 @@ def validate_narrative_urns(narrative: str, allowed_urns: set[str]) -> bool:
     return True
 
 
-def generate_narrative(
+def generate_narrative_detailed(
     verdict: Verdict,
     *,
     api_key: str | None = None,
     model: str = "claude-sonnet-4-6",
-    client: any = None,
-) -> str:
-    """Generate prose explanation for a Verdict.
+    client: Any = None,
+) -> tuple[str, bool]:
+    """Generate prose for a Verdict, and say whether an LLM actually wrote it.
 
-    Uses Anthropic LLM if API key / client is available and output passes URN validation.
-    Otherwise falls back to Jinja2 template rendering.
+    Callers need the flag because the fallback is a *rendering of the same
+    findings the reporter already lays out*. Presenting it as a "narrative
+    summary" alongside them prints everything twice, which reads as a bug in
+    the report rather than as a graceful degradation.
     """
     key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     allowed_urns = extract_input_urns(verdict)
@@ -94,7 +103,8 @@ def generate_narrative(
                 client = anthropic.Anthropic(api_key=key)
 
             prompt = (
-                f"Explain the following Undertow ML Deploy Verdict in clear technical prose for a PR comment:\n"
+                "Explain the following Undertow ML Deploy Verdict in clear "
+                "technical prose for a PR comment:\n"
                 f"Verdict Severity: {verdict.severity.value}\n"
                 f"Headline: {verdict.headline()}\n"
                 f"Assets Checked: {verdict.assets_checked}\n"
@@ -119,11 +129,25 @@ def generate_narrative(
                         output_text += block.text
 
             if output_text and validate_narrative_urns(output_text, allowed_urns):
-                return output_text.strip()
+                return output_text.strip(), True
         except Exception:
             pass
 
-    return render_template(verdict)
+    return render_template(verdict), False
+
+
+def generate_narrative(
+    verdict: Verdict,
+    *,
+    api_key: str | None = None,
+    model: str = "claude-sonnet-4-6",
+    client: Any = None,
+) -> str:
+    """Prose for a Verdict, falling back to the template when no LLM is available."""
+    text, _ = generate_narrative_detailed(
+        verdict, api_key=api_key, model=model, client=client
+    )
+    return text
 
 
 # Alias for convenience

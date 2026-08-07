@@ -36,17 +36,17 @@ class SdkLineageSource(LineageSource):
         # lineage call returns [], the footprint collapses to the model itself, and
         # the verdict comes back CLEAR — a green light produced by a blind check.
         self.connection_error: str | None = None
+        self.graph: Any | None = graph
         if graph is None:
             try:
                 from datahub.ingestion.graph.client import DataHubGraph, DataHubGraphConfig
+
                 self.graph = DataHubGraph(
                     DataHubGraphConfig(server=gms_url, token=token, timeout_sec=10)
                 )
             except Exception as exc:
                 self.graph = None
                 self.connection_error = f"{type(exc).__name__}: {exc}"
-        else:
-            self.graph = graph
 
     def get_entity(self, urn: str) -> LineageNode | None:
         res = self.get_entities([urn])
@@ -62,7 +62,11 @@ class SdkLineageSource(LineageSource):
             for u in urns:
                 etype = parse_entity_type(u)
                 try:
-                    aspects = self.graph.get_entity_semityped(u) or {}
+                    # `get_entity_semityped` returns an `AspectBag` — a TypedDict
+                    # over known aspect names. `LineageNode.aspects` is deliberately
+                    # open, because differs read aspects DataHub adds faster than
+                    # this codebase tracks them, so it is widened here.
+                    aspects: dict[str, Any] = dict(self.graph.get_entity_semityped(u) or {})
                 except Exception:
                     aspects = {}
                 results[u] = LineageNode(urn=u, entity_type=etype, aspects=aspects)

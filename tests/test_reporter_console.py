@@ -1,6 +1,6 @@
 """Tests for Undertow Rich Console reporter."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from undertow.models import (
     AttributionHop,
@@ -16,13 +16,14 @@ from undertow.reporter.console import format_console
 
 def test_format_console_blocking() -> None:
     model_urn = "urn:li:mlModel:(urn:li:dataPlatform:mlflow,fraud_detector_v3,PROD)"
-    ds_urn = "raw.payments.amount_usd"
     feat_urn = "features.txn_aggregates.avg_txn_30d"
 
     path = AttributionPath(
         hops=(
             AttributionHop(urn="raw.payments", entity_type="dataset", column="amount_usd"),
-            AttributionHop(urn="staging.payments_clean", entity_type="dataset", via="DownstreamOf"),
+            AttributionHop(
+                urn="staging.payments_clean", entity_type="dataset", via="DownstreamOf"
+            ),
             AttributionHop(urn=feat_urn, entity_type="mlFeature", via="DerivedFrom"),
             AttributionHop(urn=model_urn, entity_type="mlModel", via="Consumes"),
         ),
@@ -49,7 +50,7 @@ def test_format_console_blocking() -> None:
         severity=Severity.BLOCK,
         ruled_findings=(ruled,),
         assets_checked=12,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     output = format_console(verdict, written_to_datahub=True)
@@ -83,7 +84,7 @@ def test_format_console_warning_and_clear() -> None:
         severity=Severity.WARN,
         ruled_findings=(ruled,),
         assets_checked=5,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     output_warn = format_console(verdict_warn)
@@ -95,7 +96,7 @@ def test_format_console_warning_and_clear() -> None:
         severity=Severity.CLEAR,
         ruled_findings=(),
         assets_checked=5,
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
     output_clear = format_console(verdict_clear)
