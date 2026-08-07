@@ -72,7 +72,7 @@ class ProfileCoverage:
 
     @property
     def is_blind(self) -> bool:
-        """True when nothing could be assessed at all â€” worth saying out loud."""
+        """True when nothing could be assessed at all — worth saying out loud."""
         return self.columns_compared == 0
 
     def summary(self) -> str:
@@ -139,7 +139,7 @@ def _diff_asset(
     findings: list[Finding] = []
 
     if before.profile is None or after.profile is None:
-        # Cannot assess. Deliberately silent â€” see the module docstring.
+        # Cannot assess. Deliberately silent — see the module docstring.
         return findings
 
     volume = _row_count_change(before, after, limits)
@@ -197,7 +197,7 @@ def _diff_column(
 
 
 # ---------------------------------------------------------------------------
-# Tier 1 â€” available from DataHub's default profiling
+# Tier 1 — available from DataHub's default profiling
 # ---------------------------------------------------------------------------
 
 
@@ -214,7 +214,7 @@ def _null_rate_jump(
 
     Points, not percent: 1% -> 2% is a doubling but barely matters, while
     2% -> 30% is the same relative jump and means an upstream join broke. Only
-    increases are reported â€” nulls disappearing is not a risk to a deploy.
+    increases are reported — nulls disappearing is not a risk to a deploy.
     """
     old_rate, new_rate = _null_rate(old, old_rows), _null_rate(new, new_rows)
     if old_rate is None or new_rate is None:
@@ -229,7 +229,7 @@ def _null_rate_jump(
         asset,
         old.path,
         summary=(
-            f"Null rate on `{old.path}` rose {old_rate:.1%} â†’ {new_rate:.1%} "
+            f"Null rate on `{old.path}` rose {old_rate:.1%} → {new_rate:.1%} "
             f"({jump_pp:+.1f}pp) in {short_urn(asset.urn)}"
         ),
         evidence={
@@ -249,7 +249,7 @@ def _null_rate(profile: FieldProfileSnapshot, row_count: int | None = None) -> f
     `nullProportion` is preferred because DataHub computes it directly. The
     fallback matters more than it looks: some ingestion sources populate
     `nullCount` and leave `nullProportion` empty, and the denominator is only
-    available from the *dataset* profile â€” `rowCount` is not on the field
+    available from the *dataset* profile — `rowCount` is not on the field
     profile. Without the row count a bare `nullCount` is not comparable across a
     volume change, so it is dropped rather than guessed at.
     """
@@ -279,7 +279,7 @@ def _cardinality_change(
 
     change = relative_change(float(old_count), float(new_count))
     if change is None:
-        # Baseline of zero unique values â€” an empty or all-null column. There is
+        # Baseline of zero unique values — an empty or all-null column. There is
         # no meaningful ratio, and the null-rate check already covers the case.
         return None
 
@@ -293,7 +293,7 @@ def _cardinality_change(
         asset,
         old.path,
         summary=(
-            f"Cardinality of `{old.path}` {direction} {old_count:,} â†’ {new_count:,} "
+            f"Cardinality of `{old.path}` {direction} {old_count:,} → {new_count:,} "
             f"({change_pct:+.0f}%) in {short_urn(asset.urn)}"
         ),
         evidence={
@@ -336,14 +336,14 @@ def _mean_shift(
         sigma = delta / old_stdev
         if abs(sigma) <= limits.mean_shift_sigma:
             return None
-        magnitude = f"{sigma:+.1f}Ïƒ"
+        magnitude = f"{sigma:+.1f}σ"
 
     return _finding(
         FindingKind.MEAN_SHIFT,
         asset,
         old.path,
         summary=(
-            f"Mean of `{old.path}` moved {old_mean:g} â†’ {new_mean:g} ({magnitude}) "
+            f"Mean of `{old.path}` moved {old_mean:g} → {new_mean:g} ({magnitude}) "
             f"in {short_urn(asset.urn)}"
         ),
         evidence={
@@ -365,7 +365,7 @@ def _range_violation(
     No threshold: leaving the observed range at all is the signal. A negative
     value in a column that has only ever held positives is not a 4% change, it
     is a different column. Non-numeric mins and maxes parse to `None` and are
-    skipped â€” lexicographic bounds on a string column are not evidence of drift.
+    skipped — lexicographic bounds on a string column are not evidence of drift.
     """
     old_min, old_max = as_float(old.min), as_float(old.max)
     new_min, new_max = as_float(new.min), as_float(new.max)
@@ -381,10 +381,10 @@ def _range_violation(
     }
 
     if new_min is not None and new_min < old_min:
-        breaches.append(f"min {old_min:g} â†’ {new_min:g}")
+        breaches.append(f"min {old_min:g} → {new_min:g}")
         evidence["min_breach"] = round(old_min - new_min, 6)
     if new_max is not None and new_max > old_max:
-        breaches.append(f"max {old_max:g} â†’ {new_max:g}")
+        breaches.append(f"max {old_max:g} → {new_max:g}")
         evidence["max_breach"] = round(new_max - old_max, 6)
 
     if not breaches:
@@ -407,7 +407,7 @@ def _row_count_change(
 ) -> Finding | None:
     """Volume anomaly, from `rowCount` on the dataset profile.
 
-    Asset-level, not column-level â€” `rowCount` lives on `DatasetProfile`, and
+    Asset-level, not column-level — `rowCount` lives on `DatasetProfile`, and
     `tests/test_sdk_assumptions.py` pins that asymmetry so an SDK bump cannot
     move it silently.
     """
@@ -432,7 +432,7 @@ def _row_count_change(
         after,
         None,
         summary=(
-            f"Row count of {short_urn(after.urn)} {direction} {old_rows:,} â†’ "
+            f"Row count of {short_urn(after.urn)} {direction} {old_rows:,} → "
             f"{new_rows:,} ({change_pct:+.0f}%)"
         ),
         evidence={
