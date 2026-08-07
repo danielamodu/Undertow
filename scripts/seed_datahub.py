@@ -25,6 +25,12 @@ TOKEN = os.environ.get("DATAHUB_GMS_TOKEN")
 # URN Constants
 DS_TXN_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)"
 DS_CUST_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)"
+# The staging layer is what makes the demo's attribution path more than one hop.
+# Without a dataset -> dataset edge there is no chain to walk, and a gate that
+# only ever looks at a feature's immediate source is not doing lineage at all.
+DS_STAGING_URN = (
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+)
 
 FEAT_VELOCITY_URN = "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)"
 FEAT_RISK_URN = "urn:li:mlFeature:(fraud_detection,customer_risk_score)"
@@ -193,14 +199,143 @@ def seed_datasets(emitter: DatahubRestEmitter) -> None:
     )
 
 
+def seed_staging(emitter: DatahubRestEmitter) -> None:
+    """Emit the staging table and the raw -> staging lineage edge.
+
+    Both levels are emitted: table-level `upstreams` so the traversal has an edge
+    to walk, and `fineGrainedLineages` mapping
+    `transactions.raw.transaction_amount -> staging.transactions_clean.amount`
+    so the attribution can name the column rather than the table. The column-level
+    map is the difference between "something upstream changed" and "this column,
+    this path, this owner".
+    """
+    print("Emitting staging layer and column-level lineage...")
+
+    schema_staging = models.SchemaMetadataClass(
+        schemaName="staging.transactions_clean",
+        platform=builder.make_data_platform_urn("snowflake"),
+        version=0,
+        hash="",
+        platformSchema=models.OtherSchemaClass(rawSchema=""),
+        fields=[
+            models.SchemaFieldClass(
+                fieldPath="transaction_id",
+                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+                nativeDataType="VARCHAR(64)",
+                nullable=False,
+                description="Unique transaction ID",
+            ),
+            models.SchemaFieldClass(
+                fieldPath="customer_id",
+                type=models.SchemaFieldDataTypeClass(type=models.StringTypeClass()),
+                nativeDataType="VARCHAR(64)",
+                nullable=False,
+                description="Customer ID",
+            ),
+            models.SchemaFieldClass(
+                fieldPath="amount",
+                type=models.SchemaFieldDataTypeClass(type=models.NumberTypeClass()),
+                nativeDataType="DECIMAL(10,2)",
+                nullable=False,
+                description="Cleaned transaction amount, derived from transactions.raw.transaction_amount",
+            ),
+            models.SchemaFieldClass(
+                fieldPath="event_date",
+                type=models.SchemaFieldDataTypeClass(type=models.DateTypeClass()),
+                nativeDataType="DATE",
+                nullable=False,
+                description="Transaction date",
+            ),
+        ],
+    )
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(entityUrn=DS_STAGING_URN, aspect=schema_staging)
+    )
+
+    now_ms = int(time.time() * 1000)
+    audit = models.AuditStampClass(time=now_ms, actor=builder.make_user_urn("data_eng_tom"))
+
+    upstream_lineage = models.UpstreamLineageClass(
+        upstreams=[
+            models.UpstreamClass(
+                dataset=DS_TXN_URN,
+                type=models.DatasetLineageTypeClass.TRANSFORMED,
+                auditStamp=audit,
+            )
+        ],
+        fineGrainedLineages=[
+            models.FineGrainedLineageClass(
+                upstreamType=models.FineGrainedLineageUpstreamTypeClass.FIELD_SET,
+                downstreamType=models.FineGrainedLineageDownstreamTypeClass.FIELD,
+                upstreams=[builder.make_schema_field_urn(DS_TXN_URN, "transaction_amount")],
+                downstreams=[builder.make_schema_field_urn(DS_STAGING_URN, "amount")],
+                transformOperation="CAST",
+                confidenceScore=1.0,
+            ),
+            models.FineGrainedLineageClass(
+                upstreamType=models.FineGrainedLineageUpstreamTypeClass.FIELD_SET,
+                downstreamType=models.FineGrainedLineageDownstreamTypeClass.FIELD,
+                upstreams=[builder.make_schema_field_urn(DS_TXN_URN, "customer_id")],
+                downstreams=[builder.make_schema_field_urn(DS_STAGING_URN, "customer_id")],
+                transformOperation="IDENTITY",
+                confidenceScore=1.0,
+            ),
+        ],
+    )
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(entityUrn=DS_STAGING_URN, aspect=upstream_lineage)
+    )
+
+    profile_staging = models.DatasetProfileClass(
+        timestampMillis=now_ms,
+        rowCount=10000,
+        columnCount=4,
+        fieldProfiles=[
+            models.DatasetFieldProfileClass(
+                fieldPath="amount",
+                nullCount=0,
+                nullProportion=0.0,
+                min="1.00",
+                max="5000.00",
+                mean="125.50",
+                stdev="45.20",
+            )
+        ],
+    )
+    emitter.emit_mcp(
+        MetadataChangeProposalWrapper(entityUrn=DS_STAGING_URN, aspect=profile_staging)
+    )
+
+
+def seed_dataset_ownership(emitter: DatahubRestEmitter) -> None:
+    """Put a name on every upstream dataset.
+
+    Attribution without an owner is half a finding — the engineer reading the
+    report needs to know who to talk to, not just which table moved.
+    """
+    print("Emitting dataset ownership...")
+    owner = models.OwnershipClass(
+        owners=[
+            models.OwnerClass(
+                owner=builder.make_user_urn("data_eng_tom"),
+                type=models.OwnershipTypeClass.TECHNICAL_OWNER,
+            )
+        ]
+    )
+    for urn in (DS_TXN_URN, DS_CUST_URN, DS_STAGING_URN):
+        emitter.emit_mcp(MetadataChangeProposalWrapper(entityUrn=urn, aspect=owner))
+
+
 def seed_features(emitter: DatahubRestEmitter) -> None:
     print("Emitting ML features...")
 
-    # 1. transaction_velocity_7d -> transactions.raw
+    # transaction_velocity_7d derives from the *staging* table, not the raw one.
+    # That is what gives the demo a three-hop path:
+    #   transactions.raw -> staging.transactions_clean -> feature -> model
     feat_vel_props = models.MLFeaturePropertiesClass(
         description="7-day rolling transaction velocity",
         dataType="CONTINUOUS",
-        sources=[DS_TXN_URN],
+        sources=[DS_STAGING_URN],
     )
     emitter.emit_mcp(
         MetadataChangeProposalWrapper(entityUrn=FEAT_VELOCITY_URN, aspect=feat_vel_props)
@@ -276,6 +411,33 @@ def seed_baseline(emitter: DatahubRestEmitter) -> None:
                 ),
             ),
         ),
+    )
+
+    ds_staging_asset = AssetSnapshot(
+        urn=DS_STAGING_URN,
+        entity_type="dataset",
+        columns=(
+            ColumnSnapshot(path="transaction_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=False),
+            ColumnSnapshot(path="customer_id", data_type="StringTypeClass", native_type="VARCHAR(64)", nullable=False),
+            ColumnSnapshot(path="amount", data_type="NumberTypeClass", native_type="DECIMAL(10,2)", nullable=False),
+            ColumnSnapshot(path="event_date", data_type="DateTypeClass", native_type="DATE", nullable=False),
+        ),
+        profile=ProfileSnapshot(
+            row_count=10000,
+            column_count=4,
+            fields=(
+                FieldProfileSnapshot(
+                    path="amount",
+                    null_count=0,
+                    null_proportion=0.0,
+                    min="1.00",
+                    max="5000.00",
+                    mean="125.50",
+                    stdev="45.20",
+                ),
+            ),
+        ),
+        owners=("urn:li:corpuser:data_eng_tom",),
         feeds_features=(FEAT_VELOCITY_URN,),
     )
 
@@ -315,6 +477,7 @@ def seed_baseline(emitter: DatahubRestEmitter) -> None:
         model_urn=MODEL_URN,
         assets={
             DS_TXN_URN: ds_txn_asset,
+            DS_STAGING_URN: ds_staging_asset,
             DS_CUST_URN: ds_cust_asset,
             FEAT_VELOCITY_URN: feat_vel_asset,
             FEAT_RISK_URN: feat_risk_asset,
@@ -363,10 +526,16 @@ def main() -> None:
     try:
         emitter = get_emitter()
         seed_datasets(emitter)
+        seed_staging(emitter)
+        seed_dataset_ownership(emitter)
         seed_features(emitter)
         seed_model(emitter)
         seed_baseline(emitter)
         print("Successfully seeded DataHub graph!")
+        print(
+            "  transactions.raw -> staging.transactions_clean -> "
+            "transaction_velocity_7d -> fraud_detector_v3"
+        )
     except Exception as exc:
         print(f"Error seeding DataHub: {exc}", file=sys.stderr)
         sys.exit(1)
