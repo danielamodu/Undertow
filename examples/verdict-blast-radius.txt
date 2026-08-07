@@ -1,0 +1,37 @@
+$ make blast-radius
+
+🔴 BLOCK — fraud_detector_v3 (1 blocking, 0 warning)
+
+┌────────────────────────────────────── BLOCKING ───────────────────────────────────────┐
+│ Feature `transaction_velocity_7d` — Column `transaction_amount` was dropped from      │
+│ transactions.raw                                                                      │
+│                                                                                       │
+│ transactions.raw.transaction_amount (@data_eng_tom)                                   │
+│ └── staging.transactions_clean [DownstreamOf]                                         │
+│     └── transaction_velocity_7d [DerivedFrom]                                         │
+│         └── fraud_detector_v3 [Consumes]                                              │
+│                                                                                       │
+│   Confidence: CERTAIN (column dropped)                                                │
+│                                                                                       │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+
+exit: 1
+
+------------------------------------------------------------------------------------------
+
+🔴 BLOCK — churn_predictor_v1 (1 blocking, 0 warning)
+
+┌────────────────────────────────────── BLOCKING ───────────────────────────────────────┐
+│ Feature `customer_txn_volume` — Column `transaction_amount` was dropped from          │
+│ transactions.raw                                                                      │
+│                                                                                       │
+│ transactions.raw.transaction_amount (@data_eng_tom)                                   │
+│ └── staging.transactions_clean [DownstreamOf]                                         │
+│     └── customer_txn_volume [DerivedFrom]                                             │
+│         └── churn_predictor_v1 [Consumes]                                             │
+│                                                                                       │
+│   Confidence: CERTAIN (column dropped)                                                │
+│                                                                                       │
+└───────────────────────────────────────────────────────────────────────────────────────┘
+
+exit: 1

@@ -1,16 +1,14 @@
-﻿🔴 BLOCK — fraud_detector_v3 (1 blocking, 0 warning)
+🔴 BLOCK — fraud_detector_v3 (1 blocking, 0 warning)
 
-┌───────────────────────────────── BLOCKING ──────────────────────────────────┐
-│ Feature `transaction_velocity_7d` — Column `transaction_amount` was dropped │
-│ from transactions.raw                                                       │
-│                                                                             │
-│ transactions.raw.transaction_amount (@data_eng_tom)                         │
-│ └── staging.transactions_clean [DownstreamOf]                               │
-│     └── transaction_velocity_7d [DerivedFrom]                               │
-│         └── fraud_detector_v3 [Consumes]                                    │
-│                                                                             │
-│   Confidence: CERTAIN (column dropped)                                      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-✍ Written to DataHub → fraud_detector_v3
+┌────────────────────────────────────── BLOCKING ───────────────────────────────────────┐
+│ Feature `transaction_velocity_7d` — Column `transaction_amount` was dropped from      │
+│ transactions.raw                                                                      │
+│                                                                                       │
+│ transactions.raw.transaction_amount (@data_eng_tom)                                   │
+│ └── staging.transactions_clean [DownstreamOf]                                         │
+│     └── transaction_velocity_7d [DerivedFrom]                                         │
+│         └── fraud_detector_v3 [Consumes]                                              │
+│                                                                                       │
+│   Confidence: CERTAIN (column dropped)                                                │
+│                                                                                       │
+└───────────────────────────────────────────────────────────────────────────────────────┘
