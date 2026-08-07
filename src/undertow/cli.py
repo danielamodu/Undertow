@@ -77,15 +77,24 @@ def _lineage_source(use_mcp: bool) -> Iterator[object]:
     lifetime the SDK path does not. Both are handed out through one context
     manager rather than making every command remember the difference.
     """
+    gms_url = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080")
+    token = os.environ.get("DATAHUB_GMS_TOKEN")
+
     if not use_mcp:
-        yield SdkLineageSource(
-            gms_url=os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080"),
-            token=os.environ.get("DATAHUB_GMS_TOKEN"),
-        )
+        yield SdkLineageSource(gms_url=gms_url, token=token)
         return
 
+    # The server resolves its own connection through `DataHubClient.from_env()`,
+    # which reads the environment and then falls back to `~/.datahubenv`. A CI
+    # runner has neither, so without handing the resolved URL down explicitly the
+    # subprocess dies during startup and the only symptom is a 20s timeout. Both
+    # paths now agree on where DataHub is, including the localhost default.
+    mcp_env = {"DATAHUB_GMS_URL": gms_url}
+    if token:
+        mcp_env["DATAHUB_GMS_TOKEN"] = token
+
     try:
-        executor = McpToolExecutor()
+        executor = McpToolExecutor(env=mcp_env)
         executor.start()
     except McpError as exc:
         err_console.print(

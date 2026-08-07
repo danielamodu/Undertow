@@ -28,6 +28,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 import threading
 from contextlib import AsyncExitStack
 from typing import Any
@@ -93,6 +94,7 @@ class McpToolExecutor:
         self._thread: threading.Thread | None = None
         self._stack: AsyncExitStack | None = None
         self._session: Any = None
+        self._stderr_file: Any = None
 
     @staticmethod
     def _build_env(overrides: dict[str, str] | None) -> dict[str, str]:
@@ -120,6 +122,16 @@ class McpToolExecutor:
         if self._thread is not None:
             return
 
+        # The server logs its GraphQL traffic at debug level, and `stdio_client`
+        # sends the child's stderr straight to ours by default. On a healthy run
+        # that buries the verdict under a query dump; on a failed start it is the
+        # only explanation available. So it goes to a temp file: silent when
+        # things work, quoted back in the error when they don't.
+        #
+        # A real file rather than a StringIO because the child needs a genuine
+        # file descriptor to inherit.
+        self._stderr_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
+
         ready = threading.Event()
         error: list[BaseException] = []
 
@@ -144,11 +156,34 @@ class McpToolExecutor:
                 f"Timed out after {self.startup_timeout}s starting the DataHub MCP server "
                 f"({self.command} {' '.join(self.args)}). The server usually exits this way "
                 "when it cannot reach DataHub — check DATAHUB_GMS_URL and DATAHUB_GMS_TOKEN."
+                + self._captured_stderr()
             )
         if error:
             raise McpError(
                 f"Could not start the DataHub MCP server: {type(error[0]).__name__}: {error[0]}"
+                + self._captured_stderr()
             ) from error[0]
+
+    def _captured_stderr(self, max_lines: int = 15) -> str:
+        """The child's last words, for use in a startup failure message.
+
+        Truncated from the end: the traceback that explains the exit is the last
+        thing written, and the import warnings above it explain nothing.
+        """
+        handle = self._stderr_file
+        if handle is None:
+            return ""
+        try:
+            handle.flush()
+            handle.seek(0)
+            lines = [ln.rstrip() for ln in handle.readlines() if ln.strip()]
+        except Exception:  # noqa: BLE001 - diagnostics must never mask the real error
+            return ""
+        if not lines:
+            return ""
+        tail = lines[-max_lines:]
+        elided = "" if len(lines) <= max_lines else f"  ... {len(lines) - max_lines} earlier lines\n"
+        return "\n\nServer output:\n" + elided + "\n".join(f"  {ln}" for ln in tail)
 
     async def _connect(self) -> None:
         try:
@@ -162,7 +197,9 @@ class McpToolExecutor:
         params = StdioServerParameters(command=self.command, args=self.args, env=self.env)
 
         self._stack = AsyncExitStack()
-        read, write = await self._stack.enter_async_context(stdio_client(params))
+        read, write = await self._stack.enter_async_context(
+            stdio_client(params, errlog=self._stderr_file or sys.stderr)
+        )
         self._session = await self._stack.enter_async_context(ClientSession(read, write))
         await self._session.initialize()
 
@@ -186,6 +223,12 @@ class McpToolExecutor:
             self._loop = None
             self._thread = None
             self._session = None
+            if self._stderr_file is not None:
+                try:
+                    self._stderr_file.close()
+                except Exception:  # noqa: BLE001 - closing a temp file must not fail a run
+                    pass
+                self._stderr_file = None
 
     async def _disconnect(self) -> None:
         if self._stack is not None:
