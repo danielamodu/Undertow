@@ -291,28 +291,7 @@ def _build_asset_snapshot(
                 )
 
         if "datasetProfile" in aspects:
-            dp = aspects["datasetProfile"]
-            fps: list[FieldProfileSnapshot] = []
-            for fp in _field(dp, "fieldProfiles") or []:
-                fps.append(
-                    FieldProfileSnapshot(
-                        path=_field(fp, "fieldPath") or "",
-                        null_count=_field(fp, "nullCount"),
-                        null_proportion=_field(fp, "nullProportion"),
-                        unique_count=_field(fp, "uniqueCount"),
-                        unique_proportion=_field(fp, "uniqueProportion"),
-                        min=_as_str(_field(fp, "min")),
-                        max=_as_str(_field(fp, "max")),
-                        mean=_as_str(_field(fp, "mean")),
-                        median=_as_str(_field(fp, "median")),
-                        stdev=_as_str(_field(fp, "stdev")),
-                    )
-                )
-            profile = ProfileSnapshot(
-                row_count=_field(dp, "rowCount"),
-                column_count=_field(dp, "columnCount"),
-                fields=tuple(fps),
-            )
+            profile = _profile_snapshot(aspects["datasetProfile"])
 
         if "globalTags" in aspects:
             for t in _field(aspects["globalTags"], "tags") or []:
@@ -329,6 +308,20 @@ def _build_asset_snapshot(
             deprecated = bool(_field(dep, "deprecated") or False)
             note = _field(dep, "note")
 
+    # `datasetProfile` is a *timeseries* aspect. It never appears in an entity
+    # snapshot, so the branch above cannot fire against a live GMS — only
+    # against a source that hands back synthetic aspects, which is exactly what
+    # the tests did. Sources that can reach the timeseries API expose
+    # `get_latest_profile`; without it the footprint is simply unprofiled, and
+    # `profile_coverage` reports that honestly rather than reading silence as
+    # "no drift".
+    if profile is None:
+        fetch = getattr(source, "get_latest_profile", None)
+        if callable(fetch):
+            raw = fetch(urn)
+            if raw:
+                profile = _profile_snapshot(raw)
+
     return AssetSnapshot(
         urn=urn,
         entity_type=entity_type,
@@ -338,6 +331,30 @@ def _build_asset_snapshot(
         owners=tuple(owners),
         deprecated=deprecated,
         deprecation_note=note,
+    )
+
+
+def _profile_snapshot(dp: Any) -> ProfileSnapshot:
+    """Build a ProfileSnapshot from a datasetProfile aspect, dict or class."""
+    fps = [
+        FieldProfileSnapshot(
+            path=_field(fp, "fieldPath") or "",
+            null_count=_field(fp, "nullCount"),
+            null_proportion=_field(fp, "nullProportion"),
+            unique_count=_field(fp, "uniqueCount"),
+            unique_proportion=_field(fp, "uniqueProportion"),
+            min=_as_str(_field(fp, "min")),
+            max=_as_str(_field(fp, "max")),
+            mean=_as_str(_field(fp, "mean")),
+            median=_as_str(_field(fp, "median")),
+            stdev=_as_str(_field(fp, "stdev")),
+        )
+        for fp in _field(dp, "fieldProfiles") or []
+    ]
+    return ProfileSnapshot(
+        row_count=_field(dp, "rowCount"),
+        column_count=_field(dp, "columnCount"),
+        fields=tuple(fps),
     )
 
 
