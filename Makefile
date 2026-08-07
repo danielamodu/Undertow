@@ -50,7 +50,8 @@ check-investigate:
 demo: reset baseline break check-write
 
 test:
-	pytest tests/ -v
+	pytest tests/ -q
+	pytest contrib/datahub-mlmodel-patch-builder/ -q
 
 lint:
 	ruff check src/ tests/

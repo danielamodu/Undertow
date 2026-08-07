@@ -1,0 +1,105 @@
+name: Undertow Deploy Gate
+
+# The reference integration: what running Undertow as a pre-deploy gate in a
+# real repository looks like. Copy this into the repo that owns your models.
+#
+# It is `workflow_dispatch` only, on purpose. Undertow needs a reachable
+# DataHub, and a hosted runner has none — pointing this at the localhost
+# default on every pull request would exit 2 (Undertow could not produce a
+# verdict) and mark every PR failed for a reason that has nothing to do with
+# the change under review. A gate that cries wolf gets deleted.
+#
+# To run it against your own catalog:
+#   1. Set the DATAHUB_GMS_URL and DATAHUB_GMS_TOKEN repository secrets.
+#   2. Uncomment the `pull_request:` trigger below.
+#   3. Optionally set ANTHROPIC_API_KEY to enable `--investigate`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_urn:
+        description: "mlModel URN to evaluate"
+        required: false
+        default: "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+      write_back:
+        description: "Write the verdict back into DataHub"
+        type: boolean
+        required: false
+        default: true
+  # pull_request:
+  #   types: [opened, synchronize, reopened]
+
+jobs:
+  gate:
+    name: Lineage-grounded deploy gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Undertow
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # Fail fast and legibly. Without this the run reaches `undertow check`,
+      # cannot resolve anything, and exits 2 — technically correct, but it
+      # reads as a broken gate rather than an unconfigured one.
+      - name: Require a DataHub to check against
+        env:
+          DATAHUB_GMS_URL: ${{ secrets.DATAHUB_GMS_URL }}
+        run: |
+          if [ -z "$DATAHUB_GMS_URL" ]; then
+            echo "::error::DATAHUB_GMS_URL is not set. Undertow resolves lineage from a live DataHub; set the repository secret before running this workflow."
+            exit 1
+          fi
+
+      - name: Evaluate upstream lineage and risk policy
+        id: gate
+        env:
+          DATAHUB_GMS_URL: ${{ secrets.DATAHUB_GMS_URL }}
+          DATAHUB_GMS_TOKEN: ${{ secrets.DATAHUB_GMS_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL_URN: ${{ github.event.inputs.model_urn || secrets.MODEL_URN }}
+          WRITE_BACK: ${{ github.event.inputs.write_back }}
+        run: |
+          args=(check --model "$MODEL_URN")
+          if [ "$WRITE_BACK" != "false" ]; then
+            args+=(--write-back)
+          fi
+          undertow "${args[@]}"
+
+      # Exit 1 (BLOCK) and exit 2 (Undertow failed) demand different responses,
+      # so the comment says which happened rather than collapsing both into
+      # "the gate failed".
+      - name: Comment on the PR
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            let body = "### 🔴 Undertow\n\nThe gate did not pass. See the workflow logs for the full attribution path.";
+            const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+            if (summaryPath && fs.existsSync(summaryPath)) {
+              const content = fs.readFileSync(summaryPath, 'utf8');
+              if (content.trim()) {
+                body = content;
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
