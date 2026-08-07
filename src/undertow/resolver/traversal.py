@@ -116,6 +116,23 @@ def resolve_footprint(
     )
 
 
+def _member(obj: Any, name: str) -> Any:
+    """Read `name` off a mapping or an object, without ever returning a method.
+
+    `getattr(some_dict, "values")` returns `dict.values` — a bound method, and
+    truthy. Aspects arrive as schema classes from the SDK and as plain dicts
+    from the MCP server and from recordings, so a naive
+    `getattr(x, "values", None) or x.get("values")` silently picks up the
+    method for every dict and then subscripts it.
+
+    Mapping first, attributes second, and never a callable.
+    """
+    if isinstance(obj, dict):
+        return obj.get(name)
+    value = getattr(obj, name, None)
+    return None if callable(value) else value
+
+
 def _extract_baseline_snapshot(node: LineageNode | None) -> UndertowSnapshot | None:
     """Read the baseline snapshot out of structuredProperties, or institutionalMemory."""
     if not node or not node.aspects:
@@ -124,23 +141,15 @@ def _extract_baseline_snapshot(node: LineageNode | None) -> UndertowSnapshot | N
     # 1. Check structuredProperties
     sp_aspect = node.aspects.get("structuredProperties")
     if sp_aspect:
-        props = (
-            getattr(sp_aspect, "properties", None)
-            or _get_dict_or_attr(sp_aspect, "properties")
-            or []
-        )
+        props = _member(sp_aspect, "properties") or []
         for prop in props:
-            p_urn = (
-                getattr(prop, "propertyUrn", None)
-                or _get_dict_or_attr(prop, "propertyUrn")
-                or ""
-            )
-            values = getattr(prop, "values", None) or _get_dict_or_attr(prop, "values") or []
+            p_urn = _member(prop, "propertyUrn") or ""
+            values = _member(prop, "values") or []
             if "undertow_baseline" in str(p_urn) and values:
                 raw_val = values[0]
                 val_str = (
-                    getattr(raw_val, "value", None)
-                    or getattr(raw_val, "stringValue", None)
+                    _member(raw_val, "value")
+                    or _member(raw_val, "stringValue")
                     or str(raw_val)
                 )
                 try:
@@ -155,17 +164,9 @@ def _extract_baseline_snapshot(node: LineageNode | None) -> UndertowSnapshot | N
     # 2. Check institutionalMemory fallback
     im_aspect = node.aspects.get("institutionalMemory")
     if im_aspect:
-        elements = (
-            getattr(im_aspect, "elements", None)
-            or _get_dict_or_attr(im_aspect, "elements")
-            or []
-        )
+        elements = _member(im_aspect, "elements") or []
         for elem in elements:
-            desc = (
-                getattr(elem, "description", None)
-                or _get_dict_or_attr(elem, "description")
-                or ""
-            )
+            desc = _member(elem, "description") or ""
             if "{" in desc and "model_urn" in desc:
                 json_str = desc[desc.find("{"):desc.rfind("}") + 1]
                 try:

@@ -14,6 +14,8 @@ from undertow.resolver.mcp_client import (
     McpToolExecutor,
 )
 from undertow.resolver.mcp_source import McpLineageSource
+from undertow.resolver.profiles import TimeseriesProfileReader
+from undertow.resolver.recorded import RecordedLineageSource
 from undertow.resolver.sdk_source import SdkLineageSource
 from undertow.resolver.traversal import resolve_footprint
 
@@ -26,8 +28,10 @@ __all__ = [
     "McpError",
     "McpLineageSource",
     "McpToolExecutor",
+    "RecordedLineageSource",
     "SchemaFieldInfo",
     "SdkLineageSource",
+    "TimeseriesProfileReader",
     "parse_entity_type",
     "resolve_footprint",
 ]

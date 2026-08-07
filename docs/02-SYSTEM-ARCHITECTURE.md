@@ -1,6 +1,6 @@
 # Undertow — System Architecture & Design
 
-**Status:** design locked for v1 · **Target:** DataHub Agent Hackathon, deadline 2026-08-10
+**Status:** design locked for v1
 
 ---
 
@@ -58,10 +58,10 @@ Undertow is a **stateless analysis agent** invoked at deploy time. It holds no d
 The severity verdict is computed by a rule engine over structured diffs — not by a language model. The LLM receives already-decided facts and turns them into readable prose.
 
 Why this matters:
-- A judge cannot make the gate produce a wrong verdict with a clever input
+- No input, however crafted, can talk the gate into a wrong verdict
 - Results are reproducible run-to-run — mandatory for a CI gate
 - No API key required for the core to function (LLM degrades to templated output)
-- It is genuinely the correct engineering choice, not a hackathon shortcut
+- It is genuinely the correct engineering choice, not a shortcut
 
 This is the difference between an agent that *uses* an LLM and an LLM that pretends to be a system.
 
@@ -179,7 +179,7 @@ Deterministic set comparison over `schemaMetadata` fields:
 >
 > Even with the flags on, `ge_data_profiler.py` gates quantiles and histograms behind **numeric type AND `Cardinality` ∈ {FEW, MANY, VERY_MANY}** — so STRING and DATETIME columns *never* get them, and `Cardinality.UNIQUE` columns don't either. When produced, quantiles are a fixed 5 points (`0.05, 0.25, 0.5, 0.75, 0.95`), stored as **strings**.
 >
-> **Consequence:** a PSI-only differ would work on our fixture and return nothing on a real instance. That's the definition of a demo that doesn't survive contact with a judge's own DataHub.
+> **Consequence:** a PSI-only differ would work on our fixture and return nothing on a real instance — a check that passes because it never ran.
 
 So the differ is tiered. **Tier 1 runs on default-profiled data; Tier 2 activates when richer stats exist.**
 
@@ -431,7 +431,7 @@ Note the **pegasus2avro** import path — that's what the GX plugin actually use
 
 ## 4. The Fixture — de-risking the demo
 
-The demo lives or dies on having a **real** ML graph. A hand-written JSON blob reads as fake, and judges will notice.
+The demo is only worth anything on a **real** ML graph. Lineage asserted by hand proves the reader works, not that the product does.
 
 **`fixtures/` ships a genuine end-to-end pipeline:**
 
@@ -464,7 +464,7 @@ Everything is emitted to DataHub with the Python SDK via `make seed`. The lineag
 | `make break-stats` | Shifts `merchant_risk_score` distribution, re-emits profile | 🟡 WARN / PROBABLE |
 | `make reset` | Restores baseline | 🟢 CLEAR |
 
-A judge can run all three in under two minutes and watch the gate respond correctly to each. **Both severity classes and both confidence classes get demonstrated** — that's the proof the system distinguishes what it knows from what it infers.
+All three run in under two minutes. **Both severity classes and both confidence classes get exercised** — which is what shows the system distinguishes what it knows from what it infers.
 
 ---
 

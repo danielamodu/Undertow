@@ -63,16 +63,22 @@ transactions.raw                                   (@data_eng_tom)
 
 ---
 
-## Evaluating this without Docker
-
-Standing up DataHub takes ~10 minutes and several GB. If you would rather not:
-
-- **[`examples/`](examples/)** holds real captured output — a CLEAR verdict, a BLOCK with the full attribution path, the two-model blast radius, the PR comment, and the aspects written to DataHub **read back out of GMS** to prove they landed. Nothing there is hand-written.
-- The test suite runs with no DataHub and no API key:
+## Try it in 60 seconds, without DataHub
 
 ```bash
-pip install -e ".[dev]" && pytest -q
+git clone https://github.com/danielamodu/Undertow.git && cd Undertow
+pip install -e ".[dev]"
+undertow demo
 ```
+
+That runs the whole gate — CLEAR on the approved graph, then a dropped column, then BLOCK on two models owned by two different teams — with no Docker, no DataHub, and no API key.
+
+It replays a graph **recorded from a live DataHub OSS v1.7.0** by [`scripts/record_fixture.py`](scripts/record_fixture.py): every entity, edge, schema and profile the resolver was given, captured and handed back. The differs, attribution, policy engine, reporter and exit codes are the same code a live run uses, on the same data. What it does *not* exercise is the resolver's ability to talk to DataHub — that needs `--mcp` or the SDK path against a real instance, which is what CI and `make demo` do. The command says so on every run.
+
+Also available without standing anything up:
+
+- **[`examples/`](examples/)** — real captured output for every scenario: CLEAR, WARN on drift, BLOCK, the governance case, the two-model blast radius, the pre-merge PR comment, and the aspects written to DataHub **read back out of GMS** to prove they landed.
+- The test suite, which needs no DataHub and no API key: `pytest -q`
 
 ---
 

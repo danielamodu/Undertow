@@ -17,6 +17,7 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
+from typing import Any
 
 import click
 from datahub.emitter.rest_emitter import DatahubRestEmitter
@@ -344,6 +345,133 @@ def baseline(model_urn: str, config_path: str, use_mcp: bool) -> None:
     except Exception as exc:
         err_console.print(f"[red]Failed to capture baseline:[/red] {exc}")
         raise SystemExit(EXIT_ERROR) from exc
+
+
+DEFAULT_RECORDING = "examples/recorded-graph.json"
+
+
+@main.command()
+@click.option(
+    "--recording",
+    default=DEFAULT_RECORDING,
+    show_default=True,
+    help="Recorded graph to replay.",
+)
+@click.option(
+    "--config",
+    "config_path",
+    default=DEFAULT_POLICY_PATH,
+    show_default=True,
+    help="Path to undertow.yaml.",
+)
+def demo(recording: str, config_path: str) -> None:
+    """Run the whole gate against a recorded graph. No DataHub required.
+
+    Everything above the resolver is the real code on real catalog data: the
+    differs, attribution, policy engine and reporter are the same ones a live
+    run uses. Only the source of the graph differs, and that is stated on every
+    run rather than glossed over.
+    """
+    from undertow.resolver import RecordedLineageSource
+
+    pol = _load_policy(config_path)
+
+    if not Path(recording).exists():
+        err_console.print(
+            f"[red]No recording at {recording}.[/red] "
+            "Regenerate it with `python scripts/record_fixture.py` against a live DataHub."
+        )
+        raise SystemExit(EXIT_ERROR)
+
+    with open(recording, encoding="utf-8") as handle:
+        data = json.load(handle)
+
+    models = data.get("models", {})
+    fraud, churn = models.get("fraud"), models.get("churn")
+    if not fraud or not churn:
+        err_console.print(f"[red]{recording} does not name the demo models.[/red]")
+        raise SystemExit(EXIT_ERROR)
+
+    console.print()
+    console.print("[bold]Undertow — offline demo[/bold]")
+    console.print(
+        f"  Replaying a graph recorded from DataHub OSS {data.get('gms_version', '?')}. "
+        "No DataHub is being contacted.",
+        style="dim",
+    )
+    console.print(
+        "  The differs, attribution, policy engine and reporter below are the "
+        "same code a live run uses.",
+        style="dim",
+    )
+    console.print()
+
+    def verdict_for(model_urn: str, state: str) -> tuple[Any, Any]:
+        """Diff `state` against the recorded pre-change graph."""
+        baseline = resolve_footprint(
+            model_urn, RecordedLineageSource(data, "before"), max_hops=pol.max_hops
+        ).snapshot
+        current_source = RecordedLineageSource(data, state)
+        footprint = resolve_footprint(model_urn, current_source, max_hops=pol.max_hops)
+        findings = attribute_findings(
+            diff_snapshots(baseline, footprint.snapshot, pol), footprint
+        )
+        return (
+            evaluate(
+                findings,
+                pol,
+                model_urn=model_urn,
+                assets_checked=footprint.assets_checked,
+                baseline_ref="recorded:before",
+            ),
+            profile_coverage(baseline, footprint.snapshot),
+        )
+
+    console.print("[bold]1. Before the change[/bold] — the graph as approved")
+    console.print()
+    clear_verdict, coverage = verdict_for(fraud, "before")
+    render_console(clear_verdict, coverage=coverage)
+    console.print(f"  exit code {clear_verdict.exit_code()}", style="dim")
+    console.print()
+
+    console.print(
+        "[bold]2. A data engineer drops [red]transaction_amount[/red] "
+        "from transactions.raw[/bold]"
+    )
+    console.print(
+        "  Three hops above either model. Nothing model-local can see it.", style="dim"
+    )
+    console.print()
+
+    exit_codes = []
+    for step, (label, model_urn) in enumerate((("fraud team", fraud), ("churn team", churn)), 3):
+        verdict, coverage = verdict_for(model_urn, "after")
+        console.print(f"[bold]{step}. Gating {short_urn(model_urn)}[/bold]  ({label})")
+        console.print()
+        render_console(verdict, coverage=coverage)
+        console.print(f"  exit code {verdict.exit_code()}", style="dim")
+        console.print()
+        exit_codes.append(verdict.exit_code())
+
+    console.print("[bold]One column. Two models. Two teams.[/bold]")
+    console.print(
+        "  Neither team knew the other was downstream of the same table; the graph did.",
+        style="dim",
+    )
+    console.print()
+    console.print(
+        f"  In CI both of those runs exit {exit_codes[0]}, and the deploys stop.",
+        style="dim",
+    )
+    console.print(
+        "  To run this against a real DataHub: `make seed && make baseline && make break`.",
+        style="dim",
+    )
+
+    # Exit 0: the demo ran. The verdicts report their own exit codes above, and
+    # conflating "the demo worked" with "the gate said stop" would be its own
+    # small version of the confusion this project exists to remove.
+    raise SystemExit(EXIT_OK)
 
 
 @main.command()

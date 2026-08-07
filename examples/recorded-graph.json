@@ -1,0 +1,2022 @@
+{
+  "_comment": "Recorded from a live DataHub OSS v1.7.0 by scripts/record_fixture.py. Replayed offline by `undertow demo` so the project can be evaluated without standing up the stack. Not hand-written.",
+  "after": {
+    "entities": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": {
+        "aspects": {
+          "aliases": {
+            "lowercasedUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)"
+          },
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "customers"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "datasetKey": {
+            "name": "customers.raw",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "deprecation": {
+            "actor": "urn:li:corpuser:undertow",
+            "deprecated": false,
+            "note": ""
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:data_eng_tom"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:data_eng_tom",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "schemaMetadata": {
+            "created": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "fields": [
+              {
+                "description": "Customer ID",
+                "fieldPath": "customer_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Customer signup date",
+                "fieldPath": "signup_date",
+                "isPartOfKey": false,
+                "nativeDataType": "DATE",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.DateType": {}
+                  }
+                }
+              },
+              {
+                "description": "Credit score",
+                "fieldPath": "credit_score",
+                "isPartOfKey": false,
+                "nativeDataType": "INT",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.NumberType": {}
+                  }
+                }
+              },
+              {
+                "description": "ISO Country code",
+                "fieldPath": "country_code",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(2)",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Evaluated risk level",
+                "fieldPath": "risk_level",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(16)",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              }
+            ],
+            "hash": "",
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "platform": "urn:li:dataPlatform:snowflake",
+            "platformSchema": {
+              "com.linkedin.pegasus2avro.schema.OtherSchema": {
+                "rawSchema": ""
+              }
+            },
+            "schemaName": "customers.raw",
+            "version": 0
+          }
+        },
+        "entity_type": "dataset"
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": {
+        "aspects": {
+          "aliases": {
+            "lowercasedUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+          },
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "staging"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "datasetKey": {
+            "name": "staging.transactions_clean",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "deprecation": {
+            "actor": "urn:li:corpuser:undertow",
+            "deprecated": false,
+            "note": ""
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:data_eng_tom"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:data_eng_tom",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "schemaMetadata": {
+            "created": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "fields": [
+              {
+                "fieldPath": "transaction_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "fieldPath": "customer_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "fieldPath": "amount",
+                "isPartOfKey": false,
+                "nativeDataType": "DECIMAL(10, 2)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.NumberType": {}
+                  }
+                }
+              },
+              {
+                "fieldPath": "event_date",
+                "isPartOfKey": false,
+                "nativeDataType": "DATE",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.DateType": {}
+                  }
+                }
+              }
+            ],
+            "hash": "",
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "platform": "urn:li:dataPlatform:snowflake",
+            "platformSchema": {
+              "com.linkedin.pegasus2avro.schema.OtherSchema": {
+                "rawSchema": ""
+              }
+            },
+            "schemaName": "staging.transactions_clean",
+            "version": 0
+          },
+          "upstreamLineage": {
+            "fineGrainedLineages": [
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),transaction_id)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "IDENTITY",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),transaction_id)"
+                ]
+              },
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),customer_id)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "IDENTITY",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),customer_id)"
+                ]
+              },
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),amount)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "TRANSFORMED",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),transaction_amount)"
+                ]
+              },
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),event_date)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "TRANSFORMED",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),timestamp)"
+                ]
+              }
+            ],
+            "upstreams": [
+              {
+                "auditStamp": {
+                  "actor": "urn:li:corpuser:data_eng_tom",
+                  "time": 1786146154360
+                },
+                "dataset": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "type": "TRANSFORMED"
+              }
+            ]
+          }
+        },
+        "entity_type": "dataset"
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": {
+        "aspects": {
+          "aliases": {
+            "lowercasedUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)"
+          },
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "transactions"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "datasetKey": {
+            "name": "transactions.raw",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "deprecation": {
+            "actor": "urn:li:corpuser:undertow",
+            "deprecated": false,
+            "note": ""
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:data_eng_tom"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:data_eng_tom",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "schemaMetadata": {
+            "created": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "fields": [
+              {
+                "description": "Unique transaction ID",
+                "fieldPath": "transaction_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Customer ID",
+                "fieldPath": "customer_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Merchant ID",
+                "fieldPath": "merchant_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Transaction timestamp",
+                "fieldPath": "timestamp",
+                "isPartOfKey": false,
+                "nativeDataType": "TIMESTAMP_NTZ",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.TimeType": {}
+                  }
+                }
+              }
+            ],
+            "hash": "",
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "platform": "urn:li:dataPlatform:snowflake",
+            "platformSchema": {
+              "com.linkedin.pegasus2avro.schema.OtherSchema": {
+                "rawSchema": ""
+              }
+            },
+            "schemaName": "transactions.raw",
+            "version": 1
+          }
+        },
+        "entity_type": "dataset"
+      },
+      "urn:li:mlFeature:(customer_churn,customer_txn_volume)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "mlFeatureKey": {
+            "featureNamespace": "customer_churn",
+            "name": "customer_txn_volume"
+          },
+          "mlFeatureProperties": {
+            "customProperties": {},
+            "dataType": "CONTINUOUS",
+            "description": "30-day customer transaction volume",
+            "sources": [
+              "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+            ]
+          }
+        },
+        "entity_type": "mlFeature"
+      },
+      "urn:li:mlFeature:(fraud_detection,customer_risk_score)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "mlFeatureKey": {
+            "featureNamespace": "fraud_detection",
+            "name": "customer_risk_score"
+          },
+          "mlFeatureProperties": {
+            "customProperties": {},
+            "dataType": "CONTINUOUS",
+            "description": "Aggregated customer risk score",
+            "sources": [
+              "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)"
+            ]
+          }
+        },
+        "entity_type": "mlFeature"
+      },
+      "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "mlFeatureKey": {
+            "featureNamespace": "fraud_detection",
+            "name": "transaction_velocity_7d"
+          },
+          "mlFeatureProperties": {
+            "customProperties": {},
+            "dataType": "CONTINUOUS",
+            "description": "7-day rolling transaction velocity",
+            "sources": [
+              "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+            ]
+          }
+        },
+        "entity_type": "mlFeature"
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "mlModelKey": {
+            "name": "churn_predictor_v1",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "mlModelProperties": {
+            "customProperties": {},
+            "description": "Customer churn predictor v1",
+            "mlFeatures": [
+              "urn:li:mlFeature:(customer_churn,customer_txn_volume)"
+            ],
+            "tags": [],
+            "trainingMetrics": [
+              {
+                "name": "auc",
+                "value": "0.88"
+              }
+            ]
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:ml_eng_priya"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:ml_eng_priya",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "structuredProperties": {
+            "properties": [
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_baseline",
+                "values": [
+                  {
+                    "string": "{\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)\",\"captured_at\":\"2026-08-07T23:25:30.914510Z\",\"assets\":{\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)\":{\"urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)\",\"entity_type\":\"mlModel\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[\"urn:li:corpuser:ml_eng_priya\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlFeature:(customer_churn,customer_txn_volume)\":{\"urn\":\"urn:li:mlFeature:(customer_churn,customer_txn_volume)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"amount\",\"data_type\":\"unknown\",\"native_type\":\"DECIMAL(10, 2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"event_date\",\"data_type\":\"unknown\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":4,\"fields\":[{\"path\":\"amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":\"\",\"feeds_features\":[\"urn:li:mlFeature:(customer_churn,customer_txn_volume)\"],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"transaction_amount\",\"data_type\":\"unknown\",\"native_type\":\"DECIMAL(10,2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"merchant_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":true,\"tags\":[]},{\"path\":\"timestamp\",\"data_type\":\"unknown\",\"native_type\":\"TIMESTAMP_NTZ\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":5,\"fields\":[{\"path\":\"transaction_amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":\"\",\"feeds_features\":[],\"column_features\":{}}},\"baseline_ref\":null}"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "entity_type": "mlModel"
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "institutionalMemory": {
+            "elements": [
+              {
+                "createStamp": {
+                  "actor": "urn:li:corpuser:undertow",
+                  "time": 1786146155926
+                },
+                "description": "Baseline snapshot for fraud_detector_v3: {\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"captured_at\":\"2026-08-07T23:42:35.808439Z\",\"assets\":{\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"transaction_amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10,2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"merchant_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":true,\"tags\":[]},{\"path\":\"timestamp\",\"data_type\":\"TimeTypeClass\",\"native_type\":\"TIMESTAMP_NTZ\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":5,\"fields\":[{\"path\":\"transaction_amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10, 2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"event_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":4,\"fields\":[{\"path\":\"amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\"],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"signup_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]},{\"path\":\"credit_score\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"INT\",\"nullable\":true,\"tags\":[]},{\"path\":\"country_code\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(2)\",\"nullable\":true,\"tags\":[]},{\"path\":\"risk_level\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(16)\",\"nullable\":true,\"tags\":[]}],\"profile\":{\"row_count\":5000,\"column_count\":5,\"fields\":[{\"path\":\"credit_score\",\"null_count\":50,\"null_proportion\":0.01,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"300\",\"max\":\"850\",\"mean\":\"710.0\",\"median\":null,\"stdev\":\"55.0\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\"],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\":{\"urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"entity_type\":\"mlModel\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[\"data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}}},\"baseline_ref\":\"v1.0.0-seed\"}",
+                "url": "undertow://baseline/v1"
+              }
+            ]
+          },
+          "mlModelKey": {
+            "name": "fraud_detector_v3",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "mlModelProperties": {
+            "customProperties": {},
+            "deployments": [
+              "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,fraud_detector_prod,PROD)"
+            ],
+            "description": "SageMaker Fraud Detector Model v3",
+            "groups": [
+              "urn:li:mlModelGroup:(urn:li:dataPlatform:sagemaker,fraud_detection,PROD)"
+            ],
+            "mlFeatures": [
+              "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+              "urn:li:mlFeature:(fraud_detection,customer_risk_score)"
+            ],
+            "tags": [],
+            "trainingMetrics": [
+              {
+                "name": "accuracy",
+                "value": "0.95"
+              },
+              {
+                "name": "precision",
+                "value": "0.92"
+              }
+            ]
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:ml_eng_alex"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:ml_eng_alex",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "structuredProperties": {
+            "properties": [
+              {
+                "propertyUrn": "urn:li:structuredProperty:probe_alpha",
+                "values": [
+                  {
+                    "string": "upsert-only-knew-about-alpha"
+                  }
+                ]
+              },
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_baseline",
+                "values": [
+                  {
+                    "string": "{\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"captured_at\":\"2026-08-07T23:42:35.808439Z\",\"assets\":{\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"transaction_amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10,2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"merchant_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":true,\"tags\":[]},{\"path\":\"timestamp\",\"data_type\":\"TimeTypeClass\",\"native_type\":\"TIMESTAMP_NTZ\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":5,\"fields\":[{\"path\":\"transaction_amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10, 2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"event_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":4,\"fields\":[{\"path\":\"amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\"],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"signup_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]},{\"path\":\"credit_score\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"INT\",\"nullable\":true,\"tags\":[]},{\"path\":\"country_code\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(2)\",\"nullable\":true,\"tags\":[]},{\"path\":\"risk_level\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(16)\",\"nullable\":true,\"tags\":[]}],\"profile\":{\"row_count\":5000,\"column_count\":5,\"fields\":[{\"path\":\"credit_score\",\"null_count\":50,\"null_proportion\":0.01,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"300\",\"max\":\"850\",\"mean\":\"710.0\",\"median\":null,\"stdev\":\"55.0\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\"],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\":{\"urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"entity_type\":\"mlModel\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[\"data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}}},\"baseline_ref\":\"v1.0.0-seed\"}"
+                  }
+                ]
+              },
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_risk_verdict",
+                "values": [
+                  {
+                    "string": "BLOCK"
+                  }
+                ]
+              },
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_last_checked",
+                "values": [
+                  {
+                    "string": "2026-08-07T23:31:29.645536+00:00"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "entity_type": "mlModel"
+      }
+    },
+    "lineage": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": []
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "target_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "via": null
+          },
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DownstreamOf",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "DownstreamOf",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": []
+      },
+      "urn:li:mlFeature:(customer_churn,customer_txn_volume)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "target_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlFeature:(fraud_detection,customer_risk_score)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "target_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "target_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)": {
+        "DOWNSTREAM": [],
+        "UPSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)",
+            "target_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "MemberOf",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "target_urn": "urn:li:mlModelGroup:(urn:li:dataPlatform:sagemaker,fraud_detection,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "via": null
+          },
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "via": null
+          }
+        ]
+      }
+    },
+    "profiles": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": {
+        "columnCount": 5,
+        "fieldProfiles": [
+          {
+            "fieldPath": "credit_score",
+            "max": "850",
+            "mean": "710.0",
+            "min": "300",
+            "nullCount": 50,
+            "nullProportion": 0.01,
+            "stdev": "55.0"
+          }
+        ],
+        "partitionSpec": {
+          "partition": "FULL_TABLE_SNAPSHOT",
+          "type": "FULL_TABLE"
+        },
+        "rowCount": 5000,
+        "timestampMillis": 1786146154156
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": {
+        "columnCount": 4,
+        "fieldProfiles": [
+          {
+            "fieldPath": "amount",
+            "max": "5000.00",
+            "mean": "125.50",
+            "min": "1.00",
+            "nullCount": 0,
+            "nullProportion": 0.0,
+            "stdev": "45.20"
+          }
+        ],
+        "partitionSpec": {
+          "partition": "FULL_TABLE_SNAPSHOT",
+          "type": "FULL_TABLE"
+        },
+        "rowCount": 10000,
+        "timestampMillis": 1786146154740
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": {
+        "columnCount": 5,
+        "fieldProfiles": [
+          {
+            "fieldPath": "transaction_amount",
+            "max": "5000.00",
+            "mean": "125.50",
+            "min": "1.00",
+            "nullCount": 0,
+            "nullProportion": 0.0,
+            "stdev": "45.20"
+          }
+        ],
+        "partitionSpec": {
+          "partition": "FULL_TABLE_SNAPSHOT",
+          "type": "FULL_TABLE"
+        },
+        "rowCount": 10000,
+        "timestampMillis": 1786146153825
+      }
+    },
+    "schemas": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": [
+        {
+          "data_type": "unknown",
+          "field_path": "customer_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "signup_date",
+          "native_type": "DATE",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "credit_score",
+          "native_type": "INT",
+          "nullable": true,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "country_code",
+          "native_type": "VARCHAR(2)",
+          "nullable": true,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "risk_level",
+          "native_type": "VARCHAR(16)",
+          "nullable": true,
+          "tags": []
+        }
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": [
+        {
+          "data_type": "unknown",
+          "field_path": "transaction_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "customer_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "amount",
+          "native_type": "DECIMAL(10, 2)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "event_date",
+          "native_type": "DATE",
+          "nullable": false,
+          "tags": []
+        }
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": [
+        {
+          "data_type": "unknown",
+          "field_path": "transaction_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "customer_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "merchant_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": true,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "timestamp",
+          "native_type": "TIMESTAMP_NTZ",
+          "nullable": false,
+          "tags": []
+        }
+      ],
+      "urn:li:mlFeature:(customer_churn,customer_txn_volume)": [],
+      "urn:li:mlFeature:(fraud_detection,customer_risk_score)": [],
+      "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)": [],
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)": [],
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)": []
+    }
+  },
+  "before": {
+    "entities": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": {
+        "aspects": {
+          "aliases": {
+            "lowercasedUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)"
+          },
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "customers"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "datasetKey": {
+            "name": "customers.raw",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "deprecation": {
+            "actor": "urn:li:corpuser:undertow",
+            "deprecated": false,
+            "note": ""
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:data_eng_tom"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:data_eng_tom",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "schemaMetadata": {
+            "created": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "fields": [
+              {
+                "description": "Customer ID",
+                "fieldPath": "customer_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Customer signup date",
+                "fieldPath": "signup_date",
+                "isPartOfKey": false,
+                "nativeDataType": "DATE",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.DateType": {}
+                  }
+                }
+              },
+              {
+                "description": "Credit score",
+                "fieldPath": "credit_score",
+                "isPartOfKey": false,
+                "nativeDataType": "INT",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.NumberType": {}
+                  }
+                }
+              },
+              {
+                "description": "ISO Country code",
+                "fieldPath": "country_code",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(2)",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Evaluated risk level",
+                "fieldPath": "risk_level",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(16)",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              }
+            ],
+            "hash": "",
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "platform": "urn:li:dataPlatform:snowflake",
+            "platformSchema": {
+              "com.linkedin.pegasus2avro.schema.OtherSchema": {
+                "rawSchema": ""
+              }
+            },
+            "schemaName": "customers.raw",
+            "version": 0
+          }
+        },
+        "entity_type": "dataset"
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": {
+        "aspects": {
+          "aliases": {
+            "lowercasedUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+          },
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "staging"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "datasetKey": {
+            "name": "staging.transactions_clean",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "deprecation": {
+            "actor": "urn:li:corpuser:undertow",
+            "deprecated": false,
+            "note": ""
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:data_eng_tom"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:data_eng_tom",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "schemaMetadata": {
+            "created": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "fields": [
+              {
+                "fieldPath": "transaction_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "fieldPath": "customer_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "fieldPath": "amount",
+                "isPartOfKey": false,
+                "nativeDataType": "DECIMAL(10, 2)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.NumberType": {}
+                  }
+                }
+              },
+              {
+                "fieldPath": "event_date",
+                "isPartOfKey": false,
+                "nativeDataType": "DATE",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.DateType": {}
+                  }
+                }
+              }
+            ],
+            "hash": "",
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "platform": "urn:li:dataPlatform:snowflake",
+            "platformSchema": {
+              "com.linkedin.pegasus2avro.schema.OtherSchema": {
+                "rawSchema": ""
+              }
+            },
+            "schemaName": "staging.transactions_clean",
+            "version": 0
+          },
+          "upstreamLineage": {
+            "fineGrainedLineages": [
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),transaction_id)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "IDENTITY",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),transaction_id)"
+                ]
+              },
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),customer_id)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "IDENTITY",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),customer_id)"
+                ]
+              },
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),amount)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "TRANSFORMED",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),transaction_amount)"
+                ]
+              },
+              {
+                "confidenceScore": 0.9,
+                "downstreamType": "FIELD",
+                "downstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD),event_date)"
+                ],
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "transformOperation": "TRANSFORMED",
+                "upstreamType": "FIELD_SET",
+                "upstreams": [
+                  "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD),timestamp)"
+                ]
+              }
+            ],
+            "upstreams": [
+              {
+                "auditStamp": {
+                  "actor": "urn:li:corpuser:data_eng_tom",
+                  "time": 1786146154360
+                },
+                "dataset": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
+                "query": "urn:li:query:undertow-b50fe0750f7eafde1bfd7e9cacca20e5d3280c9d5750cf161670c17df496c713",
+                "type": "TRANSFORMED"
+              }
+            ]
+          }
+        },
+        "entity_type": "dataset"
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": {
+        "aspects": {
+          "aliases": {
+            "lowercasedUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)"
+          },
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "transactions"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "datasetKey": {
+            "name": "transactions.raw",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:snowflake"
+          },
+          "deprecation": {
+            "actor": "urn:li:corpuser:undertow",
+            "deprecated": false,
+            "note": ""
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:data_eng_tom"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:data_eng_tom",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "schemaMetadata": {
+            "created": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "fields": [
+              {
+                "description": "Unique transaction ID",
+                "fieldPath": "transaction_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Customer ID",
+                "fieldPath": "customer_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Transaction amount in USD",
+                "fieldPath": "transaction_amount",
+                "isPartOfKey": false,
+                "nativeDataType": "DECIMAL(10,2)",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.NumberType": {}
+                  }
+                }
+              },
+              {
+                "description": "Merchant ID",
+                "fieldPath": "merchant_id",
+                "isPartOfKey": false,
+                "nativeDataType": "VARCHAR(64)",
+                "nullable": true,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.StringType": {}
+                  }
+                }
+              },
+              {
+                "description": "Transaction timestamp",
+                "fieldPath": "timestamp",
+                "isPartOfKey": false,
+                "nativeDataType": "TIMESTAMP_NTZ",
+                "nullable": false,
+                "recursive": false,
+                "type": {
+                  "type": {
+                    "com.linkedin.pegasus2avro.schema.TimeType": {}
+                  }
+                }
+              }
+            ],
+            "hash": "",
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "platform": "urn:li:dataPlatform:snowflake",
+            "platformSchema": {
+              "com.linkedin.pegasus2avro.schema.OtherSchema": {
+                "rawSchema": ""
+              }
+            },
+            "schemaName": "transactions.raw",
+            "version": 0
+          }
+        },
+        "entity_type": "dataset"
+      },
+      "urn:li:mlFeature:(customer_churn,customer_txn_volume)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "mlFeatureKey": {
+            "featureNamespace": "customer_churn",
+            "name": "customer_txn_volume"
+          },
+          "mlFeatureProperties": {
+            "customProperties": {},
+            "dataType": "CONTINUOUS",
+            "description": "30-day customer transaction volume",
+            "sources": [
+              "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+            ]
+          }
+        },
+        "entity_type": "mlFeature"
+      },
+      "urn:li:mlFeature:(fraud_detection,customer_risk_score)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "mlFeatureKey": {
+            "featureNamespace": "fraud_detection",
+            "name": "customer_risk_score"
+          },
+          "mlFeatureProperties": {
+            "customProperties": {},
+            "dataType": "CONTINUOUS",
+            "description": "Aggregated customer risk score",
+            "sources": [
+              "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)"
+            ]
+          }
+        },
+        "entity_type": "mlFeature"
+      },
+      "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "mlFeatureKey": {
+            "featureNamespace": "fraud_detection",
+            "name": "transaction_velocity_7d"
+          },
+          "mlFeatureProperties": {
+            "customProperties": {},
+            "dataType": "CONTINUOUS",
+            "description": "7-day rolling transaction velocity",
+            "sources": [
+              "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+            ]
+          }
+        },
+        "entity_type": "mlFeature"
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "mlModelKey": {
+            "name": "churn_predictor_v1",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "mlModelProperties": {
+            "customProperties": {},
+            "description": "Customer churn predictor v1",
+            "mlFeatures": [
+              "urn:li:mlFeature:(customer_churn,customer_txn_volume)"
+            ],
+            "tags": [],
+            "trainingMetrics": [
+              {
+                "name": "auc",
+                "value": "0.88"
+              }
+            ]
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:ml_eng_priya"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:ml_eng_priya",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "structuredProperties": {
+            "properties": [
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_baseline",
+                "values": [
+                  {
+                    "string": "{\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)\",\"captured_at\":\"2026-08-07T23:25:30.914510Z\",\"assets\":{\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)\":{\"urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)\",\"entity_type\":\"mlModel\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[\"urn:li:corpuser:ml_eng_priya\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlFeature:(customer_churn,customer_txn_volume)\":{\"urn\":\"urn:li:mlFeature:(customer_churn,customer_txn_volume)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"amount\",\"data_type\":\"unknown\",\"native_type\":\"DECIMAL(10, 2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"event_date\",\"data_type\":\"unknown\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":4,\"fields\":[{\"path\":\"amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":\"\",\"feeds_features\":[\"urn:li:mlFeature:(customer_churn,customer_txn_volume)\"],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"transaction_amount\",\"data_type\":\"unknown\",\"native_type\":\"DECIMAL(10,2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"merchant_id\",\"data_type\":\"unknown\",\"native_type\":\"VARCHAR(64)\",\"nullable\":true,\"tags\":[]},{\"path\":\"timestamp\",\"data_type\":\"unknown\",\"native_type\":\"TIMESTAMP_NTZ\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":5,\"fields\":[{\"path\":\"transaction_amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":\"\",\"feeds_features\":[],\"column_features\":{}}},\"baseline_ref\":null}"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "entity_type": "mlModel"
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)": {
+        "aspects": {
+          "browsePathsV2": {
+            "path": [
+              {
+                "id": "Default"
+              }
+            ]
+          },
+          "dataPlatformInstance": {
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "globalTags": {
+            "tags": []
+          },
+          "institutionalMemory": {
+            "elements": [
+              {
+                "createStamp": {
+                  "actor": "urn:li:corpuser:undertow",
+                  "time": 1786146155926
+                },
+                "description": "Baseline snapshot for fraud_detector_v3: {\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"captured_at\":\"2026-08-07T23:42:35.808439Z\",\"assets\":{\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"transaction_amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10,2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"merchant_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":true,\"tags\":[]},{\"path\":\"timestamp\",\"data_type\":\"TimeTypeClass\",\"native_type\":\"TIMESTAMP_NTZ\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":5,\"fields\":[{\"path\":\"transaction_amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10, 2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"event_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":4,\"fields\":[{\"path\":\"amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\"],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"signup_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]},{\"path\":\"credit_score\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"INT\",\"nullable\":true,\"tags\":[]},{\"path\":\"country_code\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(2)\",\"nullable\":true,\"tags\":[]},{\"path\":\"risk_level\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(16)\",\"nullable\":true,\"tags\":[]}],\"profile\":{\"row_count\":5000,\"column_count\":5,\"fields\":[{\"path\":\"credit_score\",\"null_count\":50,\"null_proportion\":0.01,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"300\",\"max\":\"850\",\"mean\":\"710.0\",\"median\":null,\"stdev\":\"55.0\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\"],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\":{\"urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"entity_type\":\"mlModel\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[\"data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}}},\"baseline_ref\":\"v1.0.0-seed\"}",
+                "url": "undertow://baseline/v1"
+              }
+            ]
+          },
+          "mlModelKey": {
+            "name": "fraud_detector_v3",
+            "origin": "PROD",
+            "platform": "urn:li:dataPlatform:sagemaker"
+          },
+          "mlModelProperties": {
+            "customProperties": {},
+            "deployments": [
+              "urn:li:mlModelDeployment:(urn:li:dataPlatform:sagemaker,fraud_detector_prod,PROD)"
+            ],
+            "description": "SageMaker Fraud Detector Model v3",
+            "groups": [
+              "urn:li:mlModelGroup:(urn:li:dataPlatform:sagemaker,fraud_detection,PROD)"
+            ],
+            "mlFeatures": [
+              "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+              "urn:li:mlFeature:(fraud_detection,customer_risk_score)"
+            ],
+            "tags": [],
+            "trainingMetrics": [
+              {
+                "name": "accuracy",
+                "value": "0.95"
+              },
+              {
+                "name": "precision",
+                "value": "0.92"
+              }
+            ]
+          },
+          "ownership": {
+            "lastModified": {
+              "actor": "urn:li:corpuser:unknown",
+              "time": 0
+            },
+            "ownerTypes": {
+              "urn:li:ownershipType:__system__technical_owner": [
+                "urn:li:corpuser:ml_eng_alex"
+              ]
+            },
+            "owners": [
+              {
+                "owner": "urn:li:corpuser:ml_eng_alex",
+                "type": "TECHNICAL_OWNER"
+              }
+            ]
+          },
+          "structuredProperties": {
+            "properties": [
+              {
+                "propertyUrn": "urn:li:structuredProperty:probe_alpha",
+                "values": [
+                  {
+                    "string": "upsert-only-knew-about-alpha"
+                  }
+                ]
+              },
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_baseline",
+                "values": [
+                  {
+                    "string": "{\"model_urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"captured_at\":\"2026-08-07T23:42:35.808439Z\",\"assets\":{\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"transaction_amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10,2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"merchant_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":true,\"tags\":[]},{\"path\":\"timestamp\",\"data_type\":\"TimeTypeClass\",\"native_type\":\"TIMESTAMP_NTZ\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":5,\"fields\":[{\"path\":\"transaction_amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"transaction_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"amount\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"DECIMAL(10, 2)\",\"nullable\":false,\"tags\":[]},{\"path\":\"event_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]}],\"profile\":{\"row_count\":10000,\"column_count\":4,\"fields\":[{\"path\":\"amount\",\"null_count\":0,\"null_proportion\":0.0,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"1.00\",\"max\":\"5000.00\",\"mean\":\"125.50\",\"median\":null,\"stdev\":\"45.20\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[\"urn:li:corpuser:data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\"],\"column_features\":{}},\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)\",\"entity_type\":\"dataset\",\"columns\":[{\"path\":\"customer_id\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(64)\",\"nullable\":false,\"tags\":[]},{\"path\":\"signup_date\",\"data_type\":\"DateTypeClass\",\"native_type\":\"DATE\",\"nullable\":false,\"tags\":[]},{\"path\":\"credit_score\",\"data_type\":\"NumberTypeClass\",\"native_type\":\"INT\",\"nullable\":true,\"tags\":[]},{\"path\":\"country_code\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(2)\",\"nullable\":true,\"tags\":[]},{\"path\":\"risk_level\",\"data_type\":\"StringTypeClass\",\"native_type\":\"VARCHAR(16)\",\"nullable\":true,\"tags\":[]}],\"profile\":{\"row_count\":5000,\"column_count\":5,\"fields\":[{\"path\":\"credit_score\",\"null_count\":50,\"null_proportion\":0.01,\"unique_count\":null,\"unique_proportion\":null,\"min\":\"300\",\"max\":\"850\",\"mean\":\"710.0\",\"median\":null,\"stdev\":\"55.0\",\"sample_values\":[]}]},\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\"],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\":{\"urn\":\"urn:li:mlFeature:(fraud_detection,customer_risk_score)\",\"entity_type\":\"mlFeature\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}},\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\":{\"urn\":\"urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)\",\"entity_type\":\"mlModel\",\"columns\":[],\"profile\":null,\"tags\":[],\"owners\":[\"data_eng_tom\"],\"deprecated\":false,\"deprecation_note\":null,\"feeds_features\":[],\"column_features\":{}}},\"baseline_ref\":\"v1.0.0-seed\"}"
+                  }
+                ]
+              },
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_risk_verdict",
+                "values": [
+                  {
+                    "string": "BLOCK"
+                  }
+                ]
+              },
+              {
+                "propertyUrn": "urn:li:structuredProperty:undertow_last_checked",
+                "values": [
+                  {
+                    "string": "2026-08-07T23:31:29.645536+00:00"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "entity_type": "mlModel"
+      }
+    },
+    "lineage": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": []
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "target_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "via": null
+          },
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DownstreamOf",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "DownstreamOf",
+            "source_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": []
+      },
+      "urn:li:mlFeature:(customer_churn,customer_txn_volume)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "target_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlFeature:(fraud_detection,customer_risk_score)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "target_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "target_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "DerivedFrom",
+            "source_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "target_urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)": {
+        "DOWNSTREAM": [],
+        "UPSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)",
+            "target_urn": "urn:li:mlFeature:(customer_churn,customer_txn_volume)",
+            "via": null
+          }
+        ]
+      },
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)": {
+        "DOWNSTREAM": [
+          {
+            "relationship": "MemberOf",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "target_urn": "urn:li:mlModelGroup:(urn:li:dataPlatform:sagemaker,fraud_detection,PROD)",
+            "via": null
+          }
+        ],
+        "UPSTREAM": [
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,customer_risk_score)",
+            "via": null
+          },
+          {
+            "relationship": "Consumes",
+            "source_urn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)",
+            "target_urn": "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)",
+            "via": null
+          }
+        ]
+      }
+    },
+    "profiles": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": {
+        "columnCount": 5,
+        "fieldProfiles": [
+          {
+            "fieldPath": "credit_score",
+            "max": "850",
+            "mean": "710.0",
+            "min": "300",
+            "nullCount": 50,
+            "nullProportion": 0.01,
+            "stdev": "55.0"
+          }
+        ],
+        "partitionSpec": {
+          "partition": "FULL_TABLE_SNAPSHOT",
+          "type": "FULL_TABLE"
+        },
+        "rowCount": 5000,
+        "timestampMillis": 1786146154156
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": {
+        "columnCount": 4,
+        "fieldProfiles": [
+          {
+            "fieldPath": "amount",
+            "max": "5000.00",
+            "mean": "125.50",
+            "min": "1.00",
+            "nullCount": 0,
+            "nullProportion": 0.0,
+            "stdev": "45.20"
+          }
+        ],
+        "partitionSpec": {
+          "partition": "FULL_TABLE_SNAPSHOT",
+          "type": "FULL_TABLE"
+        },
+        "rowCount": 10000,
+        "timestampMillis": 1786146154740
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": {
+        "columnCount": 5,
+        "fieldProfiles": [
+          {
+            "fieldPath": "transaction_amount",
+            "max": "5000.00",
+            "mean": "125.50",
+            "min": "1.00",
+            "nullCount": 0,
+            "nullProportion": 0.0,
+            "stdev": "45.20"
+          }
+        ],
+        "partitionSpec": {
+          "partition": "FULL_TABLE_SNAPSHOT",
+          "type": "FULL_TABLE"
+        },
+        "rowCount": 10000,
+        "timestampMillis": 1786146153825
+      }
+    },
+    "schemas": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,customers.raw,PROD)": [
+        {
+          "data_type": "unknown",
+          "field_path": "customer_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "signup_date",
+          "native_type": "DATE",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "credit_score",
+          "native_type": "INT",
+          "nullable": true,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "country_code",
+          "native_type": "VARCHAR(2)",
+          "nullable": true,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "risk_level",
+          "native_type": "VARCHAR(16)",
+          "nullable": true,
+          "tags": []
+        }
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)": [
+        {
+          "data_type": "unknown",
+          "field_path": "transaction_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "customer_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "amount",
+          "native_type": "DECIMAL(10, 2)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "event_date",
+          "native_type": "DATE",
+          "nullable": false,
+          "tags": []
+        }
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)": [
+        {
+          "data_type": "unknown",
+          "field_path": "transaction_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "customer_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "transaction_amount",
+          "native_type": "DECIMAL(10,2)",
+          "nullable": false,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "merchant_id",
+          "native_type": "VARCHAR(64)",
+          "nullable": true,
+          "tags": []
+        },
+        {
+          "data_type": "unknown",
+          "field_path": "timestamp",
+          "native_type": "TIMESTAMP_NTZ",
+          "nullable": false,
+          "tags": []
+        }
+      ],
+      "urn:li:mlFeature:(customer_churn,customer_txn_volume)": [],
+      "urn:li:mlFeature:(fraud_detection,customer_risk_score)": [],
+      "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)": [],
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)": [],
+      "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)": []
+    }
+  },
+  "gms_version": "1.7.0",
+  "models": {
+    "churn": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)",
+    "fraud": "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+  }
+}

@@ -133,7 +133,7 @@ Three things make this credible: **the path** (not just "something drifted"), **
 ## 5. Design Principles
 
 **1 · Prove, don't predict.**
-We never claim "accuracy will drop 4%." We claim "this feature's upstream column was deleted — here is the path." Every finding is falsifiable by inspecting the graph. This is the difference between a tool engineers trust and a demo that collapses under a judge's test input.
+We never claim "accuracy will drop 4%." We claim "this feature's upstream column was deleted — here is the path." Every finding is falsifiable by inspecting the graph. That is the difference between a tool engineers trust and one that collapses the first time somebody checks its arithmetic.
 
 **2 · Certainty is a first-class output.**
 `CERTAIN` (schema diff) blocks. `PROBABLE` (statistics) warns. Conflating them is how monitoring tools train people to ignore alerts.
@@ -179,24 +179,22 @@ Reading the graph is table stakes. Writing conclusions back is what makes the st
 | **Submission quality** | One-command demo, seeded fixture, <3min video with a clean narrative arc. |
 | **OSS contribution bonus** | `MLModelPatchBuilder` for `datahub/specific/`. DataHub's `entity_client.update()` accepts a `MetadataPatchProposal` and routes it to a surgical `PATCH`, and `datahub/specific/` supplies builders for seven entity types — but none for an ML entity, so `mlModel` aspects can only be written by full-aspect `UPSERT`. Verified against a live GMS: two independent `PATCH` writes to `structuredProperties` both survive; an `UPSERT` silently drops the property it didn't know about. The builder composes DataHub's existing entity-agnostic mixins — no new machinery, just the missing composition. |
 
-### Say the quiet part first
+### Where this sits relative to DataHub itself
 
-**DataHub Cloud already markets blast-radius analysis** — "shows exactly which models, reports, and teams are affected the moment upstream data shifts." A judge will know this, or find it in ninety seconds.
+**DataHub Cloud already ships blast-radius analysis** — "shows exactly which models, reports, and teams are affected the moment upstream data shifts." Undertow does not claim to have invented downstream traversal, and would be a worse product if it pretended the graph were not already there.
 
-So Undertow's pitch leads with it: *we compose DataHub's shipped primitives and add the two things it deliberately leaves out — joining the graph to a measured signal, and making the result blocking.* DataHub informs; Undertow decides.
+It composes DataHub's shipped primitives and adds the two things they deliberately leave out: joining the graph to a measured signal, and making the result blocking. DataHub informs; Undertow decides.
 
-Framed that way, the overlap is an asset — it's evidence the product is built along the platform's own grain rather than beside it. Framed the other way, a judge discovers it themselves and concludes we hadn't read the docs. Same facts, opposite outcomes.
-
-**Challenge fit:** Challenge 3 (Production ML Agents) directly — *"agents that protect models in production, using end-to-end lineage, to catch silent problems before they cost money."* That is a near-verbatim description of this product. Also satisfies Challenge 1 (agent does real work and writes results back).
+The overlap is the point. A tool built along the platform's grain inherits every future improvement to that platform; one built beside it inherits nothing and has to maintain its own copy of the graph.
 
 ---
 
 ## 8. Success Criteria
 
-**Demo must survive a judge's hands.**
-- `docker compose up` → seeded DataHub with ML lineage in <10 min
+**It has to work in someone else's hands, on their machine.**
+- `datahub docker quickstart` → seeded DataHub with ML lineage in <10 min
 - One command triggers a BLOCK; one triggers a CLEAR
-- Judge can open DataHub and *see* the verdict written on the model
+- The verdict is visible in DataHub's own UI, not only in our output
 - No step depends on a live external service
 
 **Product claims must hold.**
@@ -206,7 +204,7 @@ Framed that way, the overlap is an asset — it's evidence the product is built 
 
 ---
 
-## 9. Beyond the Hackathon
+## 9. Where this goes next
 
 The wedge is the CI gate. The expansion is obvious and sequential:
 

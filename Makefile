@@ -69,6 +69,14 @@ check-mcp:
 check-investigate:
 	undertow check --model "$(FRAUD)" --mcp --investigate
 
+# The offline story: no DataHub, no Docker, real recorded data.
+demo-offline:
+	undertow demo
+
+# Re-record the offline fixture from a live instance. Leaves the graph reset.
+record:
+	python scripts/record_fixture.py
+
 demo: reset baseline break check-write
 
 test:
@@ -81,4 +89,4 @@ lint:
 
 .PHONY: install quickstart seed baseline break break-stats break-governance reset \
         check check-churn check-warn check-write blast-radius impact history check-mcp \
-        check-investigate demo test lint
+        check-investigate demo demo-offline record test lint
