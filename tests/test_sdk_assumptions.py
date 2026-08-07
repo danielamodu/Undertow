@@ -158,3 +158,97 @@ def test_assertion_result_types_are_what_the_reporter_maps_onto() -> None:
     # and BLOCK -> FAILURE, with the real severity in the description.
     for name in ("SUCCESS", "FAILURE", "ERROR", "INIT"):
         assert hasattr(sc.AssertionResultTypeClass, name)
+
+
+# --------------------------------------------------------------------------
+# Which surface an aspect lives on
+# --------------------------------------------------------------------------
+#
+# The assumption that cost the most. `datasetProfile` is a timeseries aspect,
+# so it never appears in `get_entity_semityped`, so the resolver's
+# `if "datasetProfile" in aspects` branch could not fire against a live GMS.
+# The statistical differ was fully implemented, fully unit-tested, and connected
+# to nothing.
+#
+# `ASPECT_TYPE` makes that introspectable, which turns the mistake into an
+# assertion instead of a thing to remember.
+
+
+# Aspects the traversal looks up by name in `node.aspects`, which is populated
+# from an entity snapshot. Every one of these must be versioned.
+SNAPSHOT_ASPECTS = [
+    "schemaMetadata",
+    "globalTags",
+    "ownership",
+    "deprecation",
+    "structuredProperties",
+    "institutionalMemory",
+]
+
+# Aspects Undertow reads through the timeseries API instead.
+TIMESERIES_ASPECTS = ["datasetProfile", "assertionRunEvent"]
+
+
+def aspect_class(name: str) -> type:
+    for candidate in vars(sc).values():
+        if isinstance(candidate, type) and getattr(candidate, "ASPECT_NAME", None) == name:
+            return candidate
+    raise AssertionError(f"no aspect class named {name}")
+
+
+@pytest.mark.parametrize("name", SNAPSHOT_ASPECTS)
+def test_aspects_read_from_the_snapshot_are_versioned(name: str) -> None:
+    """A timeseries aspect appearing here would silently read as absent."""
+    assert aspect_class(name).ASPECT_TYPE == "default", (
+        f"{name} is not a versioned aspect, so it will not appear in "
+        "get_entity_semityped and the traversal branch that reads it is dead."
+    )
+
+
+@pytest.mark.parametrize("name", TIMESERIES_ASPECTS)
+def test_aspects_read_from_the_timeseries_api_are_timeseries(name: str) -> None:
+    """If one of these became versioned, the extra round trip is wasted."""
+    assert aspect_class(name).ASPECT_TYPE == "timeseries"
+
+
+def test_get_timeseries_values_still_requires_a_filter() -> None:
+    """`filter` is positional and required — omitting it is a TypeError.
+
+    Worth pinning because the natural call omits it, and the failure is at
+    runtime inside a path that catches broadly.
+    """
+    from datahub.ingestion.graph.client import DataHubGraph
+
+    params = inspect.signature(DataHubGraph.get_timeseries_values).parameters
+
+    assert "filter" in params
+    assert params["filter"].default is inspect.Parameter.empty
+    assert {"entity_urn", "aspect_type", "limit"} <= set(params)
+
+
+def test_scroll_lineage_still_returns_relationships() -> None:
+    """The SDK source reads `.relationships` off the result.
+
+    It does so through `getattr(..., None) or []`, so a rename would produce an
+    empty edge list rather than an error — and an empty edge list is read
+    downstream as "nothing upstream changed", which is a CLEAR verdict.
+    """
+    import dataclasses
+
+    from datahub.ingestion.graph.client import DataHubGraph
+    from datahub.ingestion.graph.openapi import LineageRelationshipScrollResult
+
+    assert hasattr(DataHubGraph, "scroll_lineage")
+    params = inspect.signature(DataHubGraph.scroll_lineage).parameters
+    assert {"urns", "direction", "count"} <= set(params)
+
+    fields = {f.name for f in dataclasses.fields(LineageRelationshipScrollResult)}
+    assert "relationships" in fields
+
+    # And the fields the source reads off each relationship.
+    relationship = LineageRelationshipScrollResult.__annotations__["relationships"]
+    del relationship  # the element type is a forward ref; the names below are the contract
+    from datahub.ingestion.graph.openapi import LineageRelationship
+
+    edge_fields = {f.name for f in dataclasses.fields(LineageRelationship)}
+    assert {"upstream_urn", "downstream_urn", "relationship_type"} <= edge_fields

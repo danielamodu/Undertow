@@ -295,7 +295,7 @@ Ships with [`references/verdicts.md`](skills/undertow-deploy-gate/references/ver
 
 Undertow holds no database of its own. DataHub is the source of truth for topology *and* the store for verdict history — including the baseline, which means a wiped CI runner can still tell you what changed since the last approved deploy.
 
-- **Graph Traversal via the MCP Server**: A real MCP client (`--mcp`) spawns `mcp_server_datahub` over stdio, keeps one initialised session alive for the whole run, and calls `get_entities`, `get_lineage`, and `list_schema_fields`. Tool names are checked against the server's own `tools/list` at connect time, so a signature drift fails loudly instead of silently resolving to nothing.
+- **Graph Traversal via the Agent Context Kit's MCP Server**: A real MCP client (`--mcp`) spawns the DataHub MCP server over stdio, keeps one initialised session alive for the whole run, and calls `get_entities`, `get_lineage`, and `list_schema_fields`. That server is the Agent Context Kit's primary surface — the kit ships as `datahub-agent-context`, whose `mcp_tools/` are the same tools this client calls, alongside LangChain and Google ADK adapters for agents built on those frameworks. Undertow speaks the protocol directly, so it needs neither. Tool names are checked against the server's own `tools/list` at connect time, so a signature drift fails loudly instead of silently resolving to nothing.
 
   Verified against mcp-server-datahub 0.6.0 on DataHub OSS v1.7.0, which advertises **six** read-only tools: `get_entities`, `get_lineage`, `get_lineage_paths_between`, `list_schema_fields`, `search`, and `get_dataset_queries`. `search_documents` and `grep_documents` are documented but absent from that handshake, which is why the investigation loop intersects its tool list with `available_tools` rather than trusting a compile-time constant — offering a model a tool that does not exist costs a turn and teaches it nothing.
 - **SDK fallback**: `SdkLineageSource` covers environments without the MCP server. Both paths resolve the same graph and produce the same verdict.
@@ -306,6 +306,14 @@ Undertow holds no database of its own. DataHub is the source of truth for topolo
   - `institutionalMemory`: Audit links back to GitHub PRs and execution runs.
 
   Write-back goes through the REST emitter rather than the MCP server because the OSS build of `mcp-server-datahub` gates its mutation, data-quality, and user tools off — the server logs `Mutation Tools DISABLED` on startup. Reads come from MCP; writes take the path that actually exists.
+
+### Composing with other agents
+
+Undertow writes verdicts into the catalog rather than into a store of its own, which means the next agent to read that catalog inherits them without integrating with Undertow at all.
+
+DataHub's [Analytics Agent](https://datahub.com/blog/datahub-analytics-agent/) reads documentation and context before it writes SQL. After an Undertow run, a model carries an `undertow:blocked` tag, an `undertow_risk_verdict` structured property, and a native assertion whose run history says how long it has been failing. An analyst asking that agent about the model gets an answer shaped by all of it.
+
+That is the argument for a context platform working, and it is why Undertow writes back in native aspects rather than inventing its own: the two agents were never built to talk to each other, and they do not have to.
 
 ---
 
