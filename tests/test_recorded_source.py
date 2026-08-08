@@ -25,7 +25,13 @@ from undertow.resolver import RecordedLineageSource
 from undertow.resolver.base import LineageNode
 from undertow.resolver.traversal import _extract_baseline_snapshot, _member
 
-RECORDING = Path(__file__).resolve().parent.parent / "examples" / "recorded-graph.json"
+RECORDING = (
+    Path(__file__).resolve().parent.parent
+    / "src"
+    / "undertow"
+    / "data"
+    / "recorded-graph.json"
+)
 FRAUD = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
 RAW = "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)"
 
@@ -128,8 +134,18 @@ def test_an_unrelated_property_is_not_mistaken_for_a_baseline() -> None:
 
 @pytest.fixture(scope="module")
 def recording() -> dict:
-    if not RECORDING.exists():
-        pytest.skip("no recording committed")
+    """The committed recording. Absent is a failure, not a skip.
+
+    This previously skipped when the file was missing, and when the recording
+    moved into the package these seven tests stopped running without saying so
+    — the exact silent-degradation shape the rest of this suite exists to catch.
+    `undertow demo` cannot work without this file, so its absence is a broken
+    build.
+    """
+    assert RECORDING.exists(), (
+        f"{RECORDING} is missing. `undertow demo` depends on it; regenerate with "
+        "`python scripts/record_fixture.py` against a live DataHub."
+    )
     with open(RECORDING, encoding="utf-8") as handle:
         return json.load(handle)
 

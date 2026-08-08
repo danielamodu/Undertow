@@ -347,15 +347,29 @@ def baseline(model_urn: str, config_path: str, use_mcp: bool) -> None:
         raise SystemExit(EXIT_ERROR) from exc
 
 
-DEFAULT_RECORDING = "examples/recorded-graph.json"
+def _packaged_recording() -> Path | None:
+    """The recording that ships inside the installed package.
+
+    Resolved as package data rather than a path relative to the working
+    directory. `undertow demo` is the first thing anyone runs, and they will run
+    it from wherever they happen to be — a relative default works only from the
+    repository root, which is the one place a `pip install`ed tool cannot assume
+    it is standing.
+    """
+    try:
+        from importlib import resources
+
+        path = Path(str(resources.files("undertow") / "data" / "recorded-graph.json"))
+        return path if path.exists() else None
+    except Exception:
+        return None
 
 
 @main.command()
 @click.option(
     "--recording",
-    default=DEFAULT_RECORDING,
-    show_default=True,
-    help="Recorded graph to replay.",
+    default=None,
+    help="Recorded graph to replay. Defaults to the one shipped in the package.",
 )
 @click.option(
     "--config",
@@ -364,7 +378,7 @@ DEFAULT_RECORDING = "examples/recorded-graph.json"
     show_default=True,
     help="Path to undertow.yaml.",
 )
-def demo(recording: str, config_path: str) -> None:
+def demo(recording: str | None, config_path: str) -> None:
     """Run the whole gate against a recorded graph. No DataHub required.
 
     Everything above the resolver is the real code on real catalog data: the
@@ -376,15 +390,21 @@ def demo(recording: str, config_path: str) -> None:
 
     pol = _load_policy(config_path)
 
-    if not Path(recording).exists():
+    source_path = Path(recording) if recording else _packaged_recording()
+    if source_path is None or not source_path.exists():
         err_console.print(
-            f"[red]No recording at {recording}.[/red] "
-            "Regenerate it with `python scripts/record_fixture.py` against a live DataHub."
+            f"[red]No recording found[/red] at {recording or 'undertow/data/recorded-graph.json'}. "
+            "Reinstall the package, or regenerate it with "
+            "`python scripts/record_fixture.py` against a live DataHub."
         )
         raise SystemExit(EXIT_ERROR)
 
-    with open(recording, encoding="utf-8") as handle:
-        data = json.load(handle)
+    try:
+        with open(source_path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        err_console.print(f"[red]Could not read {source_path}:[/red] {exc}")
+        raise SystemExit(EXIT_ERROR) from exc
 
     models = data.get("models", {})
     fraud, churn = models.get("fraud"), models.get("churn")

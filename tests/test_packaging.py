@@ -220,6 +220,56 @@ def test_a_missing_mcp_package_is_named_not_timed_out(
     assert "--mcp" in message
 
 
+def test_the_demo_recording_is_packaged_not_relative() -> None:
+    """`undertow demo` must work from any working directory.
+
+    It defaulted to `examples/recorded-graph.json`, which resolves only from the
+    repository root — the one place a `pip install`ed tool cannot assume it is
+    standing. Someone who installs the package and runs the first command in the
+    README from their home directory got an error.
+
+    Resolved as package data instead, so it travels with the install.
+    """
+    from importlib import resources
+
+    path = Path(str(resources.files("undertow") / "data" / "recorded-graph.json"))
+
+    assert path.exists(), "the recorded graph is not importable as package data"
+
+
+def test_the_wheel_is_configured_to_ship_the_recording(pyproject: dict[str, Any]) -> None:
+    """An editable install masks this — it resolves package data to the source
+    tree, so a wheel missing the file still works locally and fails for everyone
+    else."""
+    wheel = pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]
+
+    assert any("data" in pattern for pattern in wheel.get("artifacts", []))
+
+
+def test_demo_runs_from_an_unrelated_working_directory(tmp_path: Path) -> None:
+    """The actual failure, reproduced: run it from somewhere else."""
+    import os
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "undertow.cli", "demo"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        # The report is box-drawing characters and emoji. Without an explicit
+        # encoding, subprocess decodes as cp1252 on Windows and the test fails
+        # on the output rather than on the behaviour it is checking.
+        encoding="utf-8",
+        errors="replace",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8", "COLUMNS": "95"},
+        timeout=180,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "No recording found" not in result.stdout + result.stderr
+
+
 def test_console_script_points_at_something_importable(pyproject: dict[str, Any]) -> None:
     """The `undertow` entry point is the only interface CI ever touches."""
     import importlib

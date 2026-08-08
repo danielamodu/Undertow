@@ -66,6 +66,10 @@ undertow = "undertow.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/undertow"]
+# The recorded graph `undertow demo` replays. It has to travel with the package:
+# resolving it relative to the working directory only works from the repository
+# root, which is the one place an installed tool cannot assume it is standing.
+artifacts = ["src/undertow/data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

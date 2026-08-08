@@ -34,7 +34,9 @@ from undertow.resolver import SdkLineageSource
 
 GMS_URL = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080")
 TOKEN = os.environ.get("DATAHUB_GMS_TOKEN")
-OUT = pathlib.Path(__file__).parent.parent / "examples" / "recorded-graph.json"
+# Inside the package, so `undertow demo` finds it after a pip install from any
+# working directory rather than only from the repository root.
+OUT = pathlib.Path(__file__).parent.parent / "src" / "undertow" / "data" / "recorded-graph.json"
 
 FRAUD = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
 CHURN = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)"
