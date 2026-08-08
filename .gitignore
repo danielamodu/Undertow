@@ -21,3 +21,8 @@ undertow-report.json
 .DS_Store
 .idea/
 .vscode/
+
+# Working notes for the submission itself — the recording script, the Devpost
+# draft. They are about presenting the project, not about the project, and a
+# public repository should carry the second kind only.
+_submission/
