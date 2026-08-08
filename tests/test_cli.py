@@ -155,6 +155,7 @@ def test_resolve_command_runs_successfully(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mock_source = MagicMock()
+    mock_source.connection_error = None
     mock_source.get_entity.return_value = None
     mock_source.get_entities.return_value = {}
     mock_source.get_lineage.return_value = []

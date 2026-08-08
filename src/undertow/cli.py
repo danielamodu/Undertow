@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
@@ -155,6 +155,32 @@ class _ModelUnreadable(RuntimeError):
     """One model could not be resolved, during a sweep that should continue."""
 
 
+def _fail_if_unreachable(source: object, *, stop: Callable[[str], None] | None = None) -> None:
+    """Bail out the moment an unreachable source is known, before trying it.
+
+    Checked right after the source is constructed and again inside
+    `_assert_not_blind` after resolution. The first check exists so a dead GMS
+    is reported in about a second — `SdkLineageSource`'s own preflight — instead
+    of after `resolve_footprint` has gone on to call `get_lineage`, hit the same
+    unreachable server, and raised its own, differently-worded error. The second
+    check stays as a backstop for anything that reaches `resolve_footprint`
+    without going through here.
+    """
+    connection_error = getattr(source, "connection_error", None)
+    if not connection_error:
+        return
+    message = (
+        f"[red]Cannot reach DataHub:[/red] {connection_error}\n"
+        "Undertow fails closed — no verdict is issued when the graph is unreachable. "
+        "Check DATAHUB_GMS_URL and DATAHUB_GMS_TOKEN."
+    )
+    if stop is not None:
+        stop(message)
+        return
+    err_console.print(message)
+    raise SystemExit(EXIT_ERROR)
+
+
 def _assert_not_blind(
     source: object, footprint: object, model_urn: str, *, fatal: bool = True
 ) -> None:
@@ -177,13 +203,7 @@ def _assert_not_blind(
             raise SystemExit(EXIT_ERROR)
         raise _ModelUnreadable(model_urn)
 
-    connection_error = getattr(source, "connection_error", None)
-    if connection_error:
-        stop(
-            f"[red]Cannot reach DataHub:[/red] {connection_error}\n"
-            "Undertow fails closed — no verdict is issued when the graph is unreachable. "
-            "Check DATAHUB_GMS_URL and DATAHUB_GMS_TOKEN."
-        )
+    _fail_if_unreachable(source, stop=stop)
 
     assets = getattr(getattr(footprint, "snapshot", None), "assets", {}) or {}
     if len(assets) <= 1:
@@ -293,6 +313,7 @@ def resolve(model_urn: str, use_mcp: bool) -> None:
     """Walk the graph from a model to its upstream data footprint."""
     try:
         with _lineage_source(use_mcp) as source:
+            _fail_if_unreachable(source)
             footprint = resolve_footprint(model_urn, source)
             console.print(
                 f"[green]Footprint resolved:[/green] {len(footprint.snapshot.assets)} assets, "
@@ -327,6 +348,7 @@ def baseline(model_urn: str, config_path: str, use_mcp: bool) -> None:
     pol = _load_policy(config_path)
     try:
         with _lineage_source(use_mcp) as source:
+            _fail_if_unreachable(source)
             footprint = resolve_footprint(model_urn, source, max_hops=pol.max_hops)
             _assert_not_blind(source, footprint, model_urn)
         snapshot = footprint.snapshot
@@ -831,6 +853,7 @@ def _gate_one(
     # could ask a single question. Everything after this block is pure.
     try:
         with _lineage_source(use_mcp) as source:
+            _fail_if_unreachable(source)
             # 1. Resolve
             footprint = resolve_footprint(model_urn, source, max_hops=pol.max_hops)
             _assert_not_blind(source, footprint, model_urn, fatal=fatal)
@@ -857,7 +880,18 @@ def _gate_one(
     except SystemExit:
         raise
     except Exception as exc:
-        err_console.print(f"[red]Resolver error:[/red] {exc}")
+        # `str(exc)` on a mid-run connection drop is the SDK's retry machinery
+        # talking to itself, not a sentence for a terminal. Same classifier as
+        # the preflight in SdkLineageSource — reused here because DataHub can
+        # also go away *between* connecting and the lineage call, after the
+        # constructor's own check already passed. `None` means this was not a
+        # connection failure at all, in which case the real exception is what a
+        # reader needs to see, not a guess dressed up as one.
+        from undertow.resolver.sdk_source import _describe_connection_failure
+
+        gms_url = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080")
+        detail = _describe_connection_failure(exc, gms_url) or str(exc)
+        err_console.print(f"[red]Resolver error:[/red] {detail}")
         if fatal:
             raise SystemExit(EXIT_ERROR) from exc
         return EXIT_ERROR

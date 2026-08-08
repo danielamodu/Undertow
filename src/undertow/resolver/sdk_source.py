@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import requests
+
 from undertow.resolver.base import (
     LineageEdge,
     LineageNode,
@@ -16,6 +18,30 @@ from undertow.resolver.base import (
     parse_entity_type,
 )
 from undertow.resolver.profiles import TimeseriesProfileReader
+
+
+def _describe_connection_failure(exc: BaseException, gms_url: str) -> str | None:
+    """One plain sentence for the three ways a GMS check actually fails.
+
+    `None` means: this was not a connection-shaped failure, so the caller
+    should fall back to its own message rather than let a real bug elsewhere
+    get relabelled as "could not reach DataHub". Walks `__cause__` because the
+    SDK wraps `requests` exceptions in its own error types, and it is the
+    `requests` exception underneath that says which of these it was.
+    """
+    cursor: BaseException | None = exc
+    while cursor is not None:
+        if isinstance(cursor, requests.exceptions.ConnectionError):
+            return f"could not connect to {gms_url} — is DataHub running?"
+        if isinstance(cursor, requests.exceptions.Timeout):
+            return f"{gms_url} did not respond in time — is DataHub still starting up?"
+        if isinstance(cursor, requests.exceptions.HTTPError):
+            status = getattr(cursor.response, "status_code", None)
+            if status in (401, 403):
+                return f"{gms_url} rejected the request ({status}) — check DATAHUB_GMS_TOKEN."
+            return f"{gms_url} returned an error ({status or 'unknown status'})."
+        cursor = cursor.__cause__
+    return None
 
 
 class SdkLineageSource(LineageSource):
@@ -44,11 +70,43 @@ class SdkLineageSource(LineageSource):
                 from datahub.ingestion.graph.client import DataHubGraph, DataHubGraphConfig
 
                 self.graph = DataHubGraph(
-                    DataHubGraphConfig(server=gms_url, token=token, timeout_sec=10)
+                    DataHubGraphConfig(
+                        server=gms_url,
+                        token=token,
+                        timeout_sec=10,
+                        # A refused connection is not a blip worth retrying —
+                        # if GMS were merely slow this would be a Timeout, not a
+                        # ConnectionError. Left at its default, the SDK's own
+                        # retry-with-backoff turned "is anyone home" into a
+                        # 50-second question on a connection that failed
+                        # instantly the first time.
+                        retry_max_times=0,
+                    )
                 )
+                # `DataHubGraph(...)` never talks to the server — it only builds a
+                # client. An unreachable GMS is discovered later, the first time
+                # something calls it, and by then it is `scroll_lineage` doing the
+                # discovering: through several minutes of the SDK's own retry and
+                # backoff before it gives up. Measured against a GMS that was
+                # simply not running: 148 seconds of silence, then a raw
+                # `ConnectionError`. `test_connection()` is the same round trip
+                # this constructor is really promising, done immediately and on a
+                # timeout this class controls, so "DataHub is unreachable" surfaces
+                # in about a second instead of two and a half minutes.
+                self.graph.test_connection()
             except Exception as exc:
                 self.graph = None
-                self.connection_error = f"{type(exc).__name__}: {exc}"
+                # `str(exc)` on a requests `ConnectionError` is the SDK's internal
+                # retry machinery narrating itself — WinError codes, adapter names,
+                # the literal URL it gave up on. None of that is what "Undertow
+                # fails closed" was supposed to look like on a terminal; a short,
+                # human sentence covers what the reader needs. Construction can
+                # only fail this way — anything that is not connection-shaped here
+                # would itself be a bug worth seeing in full, so the raw message is
+                # kept as the fallback rather than hidden behind a guess.
+                self.connection_error = _describe_connection_failure(
+                    exc, gms_url
+                ) or f"{type(exc).__name__}: {exc}"
 
     def get_entity(self, urn: str) -> LineageNode | None:
         res = self.get_entities([urn])

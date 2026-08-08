@@ -25,6 +25,11 @@ dependencies = [
     # Core, not optional: the narrator's template fallback is imported at module
     # scope by the CLI, so without this `undertow --version` does not start.
     "jinja2>=3.1,<4",
+    # Imported directly by the resolver to classify a connection failure into
+    # one sentence. Always present as acryl-datahub's own transport, but "always
+    # present transitively" is exactly the assumption that broke `--mcp` before —
+    # anything imported by name gets declared by name.
+    "requests>=2.31,<3",
 ]
 
 [project.optional-dependencies]
@@ -57,8 +62,10 @@ dev = [
     "pytest-cov>=5.0,<6",
     "ruff>=0.6,<1",
     "mypy>=1.11,<3",
-    # `strict = true` treats PyYAML's missing stubs as an error without this.
+    # `strict = true` treats PyYAML's / requests' missing stubs as an error
+    # without these.
     "types-PyYAML>=6.0,<7",
+    "types-requests>=2.31,<3",
 ]
 
 [project.scripts]
