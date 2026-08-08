@@ -66,6 +66,24 @@ outputs:
 runs:
   using: "composite"
   steps:
+    # First, so a misconfigured workflow fails in seconds rather than after pip
+    # has fetched the DataHub SDK.
+    - name: Check inputs
+      shell: bash
+      run: |
+        # No backticks in these messages. Inside double quotes bash treats them
+        # as command substitution, so a friendly `model` in an error string
+        # becomes "model: command not found" and the word vanishes from the
+        # message the reader needed.
+        if [ -z "${{ inputs.model }}" ] && [ "${{ inputs.all }}" != "true" ]; then
+          echo "::error::Set 'model' to a model URN, or 'all: true' to gate every model in ${{ inputs.config }}."
+          exit 1
+        fi
+        if [ -z "${{ inputs.datahub-url }}" ]; then
+          echo "::error::'datahub-url' is required. Undertow resolves lineage from a live DataHub."
+          exit 1
+        fi
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -82,18 +100,6 @@ runs:
         fi
         pip install "undertow${extras} @ git+https://github.com/danielamodu/Undertow@${{ inputs.version }}"
 
-    - name: Check inputs
-      shell: bash
-      run: |
-        if [ -z "${{ inputs.model }}" ] && [ "${{ inputs.all }}" != "true" ]; then
-          echo "::error::Set `model` to a model URN, or `all: true` to use the inventory in ${{ inputs.config }}."
-          exit 1
-        fi
-        if [ -z "${{ inputs.datahub-url }}" ]; then
-          echo "::error::datahub-url is required. Undertow resolves lineage from a live DataHub."
-          exit 1
-        fi
-
     - name: Gate
       id: gate
       shell: bash
@@ -102,15 +108,20 @@ runs:
         DATAHUB_GMS_TOKEN: ${{ inputs.datahub-token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
       run: |
+        # `if` rather than `[ ... ] && ...`. GitHub runs this with `set -e`, and
+        # a `&&` list whose left side is false returns non-zero — which kills
+        # the step the moment one of these ends up as the last line. It survives
+        # today only because something follows it, which is not a property to
+        # rely on.
         args=(check --config "${{ inputs.config }}")
         if [ "${{ inputs.all }}" = "true" ]; then
           args+=(--all)
         else
           args+=(--model "${{ inputs.model }}")
         fi
-        [ "${{ inputs.write-back }}" = "true" ]  && args+=(--write-back)
-        [ "${{ inputs.fail-on-warn }}" = "true" ] && args+=(--fail-on-warn)
-        [ "${{ inputs.use-mcp }}" = "true" ]      && args+=(--mcp)
+        if [ "${{ inputs.write-back }}" = "true" ]; then args+=(--write-back); fi
+        if [ "${{ inputs.fail-on-warn }}" = "true" ]; then args+=(--fail-on-warn); fi
+        if [ "${{ inputs.use-mcp }}" = "true" ]; then args+=(--mcp); fi
         if [ "${{ inputs.use-mcp }}" = "true" ] && [ -n "${{ inputs.anthropic-api-key }}" ]; then
           args+=(--investigate)
         fi

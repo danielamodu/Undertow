@@ -57,6 +57,71 @@ jobs:
       - name: Proposed upstream patch builder
         run: pytest contrib/datahub-mlmodel-patch-builder/ -q
 
+  action:
+    name: Reusable action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The action is what adopters actually consume, and it was shipped once
+      # without ever being executed. CI cannot exercise the gate itself — that
+      # needs a reachable DataHub — but it can prove the composite action parses,
+      # runs, and guards its inputs, which is where the two bugs found by
+      # inspection actually lived.
+      - name: Rejects a missing model
+        id: no-model
+        continue-on-error: true
+        uses: ./
+        with:
+          datahub-url: "http://localhost:8080"
+
+      - name: ...and says so rather than passing
+        shell: bash
+        run: |
+          if [ "${{ steps.no-model.outcome }}" != "failure" ]; then
+            echo "::error::The action accepted a run with no model and no 'all'."
+            exit 1
+          fi
+
+      - name: Rejects a missing DataHub URL
+        id: no-url
+        continue-on-error: true
+        uses: ./
+        with:
+          model: "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+          datahub-url: ""
+
+      - name: ...and says so rather than passing
+        shell: bash
+        run: |
+          if [ "${{ steps.no-url.outcome }}" != "failure" ]; then
+            echo "::error::The action accepted a run with no DataHub URL."
+            exit 1
+          fi
+
+      - name: Installs and reaches the gate, which fails closed with no DataHub
+        id: unreachable
+        continue-on-error: true
+        uses: ./
+        with:
+          model: "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+          datahub-url: "http://127.0.0.1:59999"
+          write-back: "false"
+
+      - name: ...reporting exit 2, not a pass
+        shell: bash
+        run: |
+          echo "verdict=${{ steps.unreachable.outputs.verdict }}"
+          echo "exit-code=${{ steps.unreachable.outputs.exit-code }}"
+          if [ "${{ steps.unreachable.outputs.exit-code }}" != "2" ]; then
+            echo "::error::Expected exit 2 from an unreachable DataHub, got '${{ steps.unreachable.outputs.exit-code }}'. A gate that cannot see must never report a pass."
+            exit 1
+          fi
+          if [ "${{ steps.unreachable.outputs.verdict }}" != "ERROR" ]; then
+            echo "::error::Expected verdict ERROR, got '${{ steps.unreachable.outputs.verdict }}'."
+            exit 1
+          fi
+
   lint:
     name: Lint and types
     runs-on: ubuntu-latest
