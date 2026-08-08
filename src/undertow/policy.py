@@ -147,6 +147,14 @@ class Policy(BaseModel):
     # How deep to walk upstream from a feature's source dataset.
     max_hops: int = 5
 
+    # The models this team gates, so `undertow check --all` has an inventory to
+    # work from. Without it, adopting Undertow means remembering a set of
+    # 70-character URNs and keeping them in step with a CI script by hand —
+    # which is how a gate ends up quietly covering three of a team's twelve
+    # models. Empty is fine; `--model` still works and is what CI uses when a
+    # pipeline already knows which model it is deploying.
+    models: tuple[str, ...] = ()
+
     def rule_for(self, kind: FindingKind) -> Rule:
         severity = self.rules.get(kind.value, _DEFAULT_SEVERITIES[kind])
         return Rule(id=_rule_id(kind), kind=kind, severity=severity)

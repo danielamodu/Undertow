@@ -42,6 +42,10 @@ check:
 check-churn:
 	undertow check --model "$(CHURN)"
 
+# Sweeps every model in the undertow.yaml inventory, exiting with the worst.
+check-all:
+	undertow check --all
+
 check-write:
 	undertow check --model "$(FRAUD)" --write-back
 
@@ -88,5 +92,5 @@ lint:
 	mypy src/
 
 .PHONY: install quickstart seed baseline break break-stats break-governance reset \
-        check check-churn check-warn check-write blast-radius impact history check-mcp \
+        check check-churn check-all check-warn check-write blast-radius impact history check-mcp \
         check-investigate demo demo-offline record test lint

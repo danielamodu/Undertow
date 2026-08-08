@@ -193,6 +193,7 @@ Windows does not ship `make`, so every target below also exists as
 | `make break-governance` | Deprecate the raw table and tag staging as PII |
 | `make check-warn` | Gate after drift: WARN, exit `0`. Statistics do not stop a deploy |
 | `make check` | Gate the fraud model |
+| `undertow check --all` | Gate every model in the `models:` inventory |
 | `make blast-radius` | Gate every model downstream of the change |
 | `make check-write` | Gate and write the verdict back to DataHub |
 | `make impact` | Check a proposed SQL change *before it merges* |
@@ -367,6 +368,59 @@ Two 2025 papers by Leest et al. frame the gap Undertow occupies:
 - **[arXiv:2510.23528](https://arxiv.org/abs/2510.23528)** — *Tracing Distribution Shifts with Causal System Maps.* Proposes making the propagation paths between environment and ML internals explicit so distribution shifts can be attributed rather than merely detected. Explicitly work-in-progress: an approach and research agenda, not an implementation.
 
 Undertow implements that attribution framing against a lineage graph that already exists in production — DataHub — and makes the result a blocking pre-deploy gate.
+
+---
+
+## Using this on your own models
+
+The demo is a fixture. Here is what adopting it looks like.
+
+**You need DataHub with ML lineage already ingested** — your warehouse or dbt for the tables, your model registry for `mlModel` and `mlFeature`. Undertow reads that graph; it does not ingest anything itself.
+
+**1. Find the model and approve today's state.**
+
+```bash
+datahub search "fraud_detector" -f entity_type=mlModel --urns-only
+undertow baseline --model "<that URN>"
+```
+
+The baseline says *this model is healthy on this data, now*. It is stored in DataHub, not on disk, so every CI runner shares one answer.
+
+**2. List the models your team gates**, in `undertow.yaml`:
+
+```yaml
+models:
+  - "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+  - "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)"
+```
+
+`undertow check --all` sweeps them and exits with the worst outcome. A model somebody forgot to add is then visible in a reviewed file, rather than a gap nobody notices until the gate turns out to cover three models out of twelve.
+
+**3. Add it to the pipeline that deploys the model.**
+
+```yaml
+- uses: danielamodu/Undertow@main
+  with:
+    model: ${{ vars.MODEL_URN }}
+    datahub-url: ${{ secrets.DATAHUB_GMS_URL }}
+    datahub-token: ${{ secrets.DATAHUB_GMS_TOKEN }}
+```
+
+From then on, a PR that retrains or redeploys that model passes silently on a clean upstream, and is blocked with the path and the owning engineer named when it isn't.
+
+**4. When a change was intentional**, re-baseline deliberately — `undertow baseline --model …` is an explicit act with a name against it, not a flag that suppresses the warning.
+
+**5. Optionally, in the repo that holds your dbt or warehouse SQL**, add [`upstream-pr-gate.yml`](.github/workflows/upstream-pr-gate.yml). The engineer removing the column then finds out on their own pull request that two models depend on it — which prevents the incident rather than catching it.
+
+**6. Tune [`undertow.yaml`](undertow.yaml)** — severity per finding kind, thresholds, and exemptions that must carry an expiry date.
+
+### What it needs from you, honestly
+
+- **Lineage in DataHub.** No column-level lineage means findings degrade from "this column" to "this table". Undertow reports what the graph supports and no more.
+- **Profiling, for the statistical checks.** Most catalogs are partly profiled, which is why every report ends with how much of the footprint it could actually inspect.
+- **A baseline per model.** Without one there is nothing to diff, and Undertow exits `2` rather than guessing.
+
+The realistic first adopter is not a platform team. It is one ML engineer who has been burned by a silent upstream change, adding this to one model's pipeline so it does not happen twice.
 
 ---
 

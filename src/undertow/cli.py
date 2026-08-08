@@ -151,7 +151,13 @@ def _load_baseline(
     return None
 
 
-def _assert_not_blind(source: object, footprint: object, model_urn: str) -> None:
+class _ModelUnreadable(RuntimeError):
+    """One model could not be resolved, during a sweep that should continue."""
+
+
+def _assert_not_blind(
+    source: object, footprint: object, model_urn: str, *, fatal: bool = True
+) -> None:
     """Refuse to return a verdict the resolver was not equipped to reach.
 
     A gate has two failure modes and they are not symmetric. A false BLOCK gets
@@ -159,26 +165,35 @@ def _assert_not_blind(source: object, footprint: object, model_urn: str) -> None
     leaves Undertow unable to see the graph — unreachable GMS, bad token, a model
     URN that resolved to nothing — must therefore exit as an error, never as a
     verdict. Silence is not evidence of safety.
+
+    `fatal=False` keeps that guarantee while sweeping an inventory: the caller
+    still records an error for this model, but the remaining models get checked
+    rather than being hidden behind the first unreachable one.
     """
+
+    def stop(message: str) -> None:
+        err_console.print(message)
+        if fatal:
+            raise SystemExit(EXIT_ERROR)
+        raise _ModelUnreadable(model_urn)
+
     connection_error = getattr(source, "connection_error", None)
     if connection_error:
-        err_console.print(
+        stop(
             f"[red]Cannot reach DataHub:[/red] {connection_error}\n"
             "Undertow fails closed — no verdict is issued when the graph is unreachable. "
             "Check DATAHUB_GMS_URL and DATAHUB_GMS_TOKEN."
         )
-        raise SystemExit(EXIT_ERROR)
 
     assets = getattr(getattr(footprint, "snapshot", None), "assets", {}) or {}
     if len(assets) <= 1:
-        err_console.print(
+        stop(
             f"[red]Resolved nothing upstream of[/red] {model_urn}\n"
             "The model has no reachable mlFeature or dataset lineage, so there is "
             "nothing to diff. This is reported as an error rather than CLEAR: an "
             "empty footprint and a clean footprint are indistinguishable, and only "
             "one of them is safe to ship."
         )
-        raise SystemExit(EXIT_ERROR)
 
 
 def _load_policy(path: str | None) -> Policy:
@@ -639,7 +654,14 @@ def history(model_urn: str, limit: int) -> None:
 
 
 @main.command()
-@click.option("--model", "model_urn", required=True, help="mlModel URN to check.")
+@click.option("--model", "model_urn", default=None, help="mlModel URN to check.")
+@click.option(
+    "--all",
+    "check_all",
+    is_flag=True,
+    default=False,
+    help="Check every model listed under `models:` in undertow.yaml.",
+)
 @click.option(
     "--config",
     "config_path",
@@ -682,7 +704,8 @@ def history(model_urn: str, limit: int) -> None:
     help="Exit 1 on WARN as well as BLOCK. Off by default: a warning annotates a deploy.",
 )
 def check(
-    model_urn: str,
+    model_urn: str | None,
+    check_all: bool,
     config_path: str,
     use_mcp: bool,
     write_back: bool,
@@ -690,8 +713,95 @@ def check(
     use_investigator: bool,
     fail_on_warn: bool,
 ) -> None:
-    """Gate a model deploy on upstream lineage risk."""
+    """Gate a model deploy on upstream lineage risk.
+
+    `--model` gates one, which is what CI does when a pipeline already knows
+    which model it is deploying. `--all` gates every model listed under
+    `models:` in undertow.yaml, for the scheduled run over a team's whole
+    inventory.
+    """
     pol = _load_policy(config_path)
+
+    if check_all and model_urn:
+        err_console.print("[red]Use --model or --all, not both.[/red]")
+        raise SystemExit(EXIT_ERROR)
+
+    if check_all:
+        targets = list(pol.models)
+        if not targets:
+            err_console.print(
+                "[red]--all needs a model inventory.[/red] Add the models this team "
+                f"gates under `models:` in {config_path}:\n\n"
+                "  models:\n"
+                '    - "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"\n'
+            )
+            raise SystemExit(EXIT_ERROR)
+    elif model_urn:
+        targets = [model_urn]
+    else:
+        err_console.print("[red]Give --model <urn>, or --all to use the inventory.[/red]")
+        raise SystemExit(EXIT_ERROR)
+
+    if len(targets) > 1:
+        # One source for the whole sweep would be faster, but each model gets its
+        # own so a failure on one cannot leave a half-torn-down MCP subprocess
+        # poisoning the rest of the run.
+        worst = EXIT_OK
+        for index, target in enumerate(targets):
+            if index:
+                console.print()
+            console.print(f"[bold]{short_urn(target)}[/bold]", style="dim")
+            code = _gate_one(
+                target,
+                pol,
+                use_mcp=use_mcp,
+                write_back=write_back,
+                baseline_path=baseline_path,
+                use_investigator=use_investigator,
+                fail_on_warn=fail_on_warn,
+                fatal=False,
+            )
+            # Worst wins, and 2 outranks 1: a model the gate could not see is a
+            # worse outcome than one it saw and blocked, because only the first
+            # is indistinguishable from a pass.
+            worst = 2 if 2 in (worst, code) else max(worst, code)
+
+        console.print()
+        console.print(f"  {len(targets)} model(s) checked, exit {worst}", style="dim")
+        raise SystemExit(worst)
+
+    raise SystemExit(
+        _gate_one(
+            targets[0],
+            pol,
+            use_mcp=use_mcp,
+            write_back=write_back,
+            baseline_path=baseline_path,
+            use_investigator=use_investigator,
+            fail_on_warn=fail_on_warn,
+            fatal=True,
+        )
+    )
+
+
+def _gate_one(
+    model_urn: str,
+    pol: Policy,
+    *,
+    use_mcp: bool,
+    write_back: bool,
+    baseline_path: str | None,
+    use_investigator: bool,
+    fail_on_warn: bool,
+    fatal: bool,
+) -> int:
+    """Gate one model and return its exit code.
+
+    `fatal` decides what an error does. Checking a single model, an error should
+    stop the process — that is the CI contract. Sweeping an inventory, one
+    unreachable model must not hide the verdicts of the other eleven, so the
+    error is reported, folded into the worst code, and the sweep continues.
+    """
 
     if use_investigator and not use_mcp:
         err_console.print(
@@ -700,6 +810,7 @@ def check(
             "server. Continuing without investigation."
         )
         use_investigator = False
+
 
     # Say it before the work starts, not after. An investigation that cannot run
     # produces output identical to a run without the flag, and a reader with no
@@ -722,7 +833,7 @@ def check(
         with _lineage_source(use_mcp) as source:
             # 1. Resolve
             footprint = resolve_footprint(model_urn, source, max_hops=pol.max_hops)
-            _assert_not_blind(source, footprint, model_urn)
+            _assert_not_blind(source, footprint, model_urn, fatal=fatal)
             current_snapshot = footprint.snapshot
 
             # 2. Baseline
@@ -741,11 +852,15 @@ def check(
                         f"[yellow]Investigation skipped:[/yellow] {why}"
                     ),
                 )
+    except _ModelUnreadable:
+        return EXIT_ERROR
     except SystemExit:
         raise
     except Exception as exc:
         err_console.print(f"[red]Resolver error:[/red] {exc}")
-        raise SystemExit(EXIT_ERROR) from exc
+        if fatal:
+            raise SystemExit(EXIT_ERROR) from exc
+        return EXIT_ERROR
 
     # 5. Policy Engine
     baseline_ref = baseline_snapshot.baseline_ref if baseline_snapshot else "none"
@@ -796,7 +911,7 @@ def check(
                 f.write(gh_comment + "\n")
 
     # The verdict decides its own exit status; this is a hand-off, not a branch.
-    raise SystemExit(verdict.exit_code(fail_on_warn=fail_on_warn))
+    return verdict.exit_code(fail_on_warn=fail_on_warn)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,17 @@
 # How deep to walk upstream from a feature's source dataset.
 max_hops: 5
 
+# The models this team gates. `undertow check --all` sweeps them; `--model`
+# still gates one, which is what a deploy pipeline uses when it already knows
+# which model it is shipping.
+#
+# Keeping the inventory here rather than in a CI script is the point: a model
+# somebody forgot to add is visible in a reviewed file, instead of being a gap
+# nobody notices until the gate turns out to cover three models out of twelve.
+models:
+  - "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
+  - "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)"
+
 # Severity per finding kind. Two categories, and the distinction is enforced
 # by the engine rather than by convention:
 #

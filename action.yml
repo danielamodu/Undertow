@@ -1,0 +1,137 @@
+name: "Undertow"
+description: "Block an ML model deploy when a breaking upstream change reaches it."
+author: "danielamodu"
+
+branding:
+  icon: "shield"
+  color: "red"
+
+# Adopting this should be three lines in someone else's workflow, not eighty
+# lines of YAML copied out of this repository and then quietly diverging from
+# it. The reference workflows in .github/workflows/ show the whole shape; this
+# is what a team actually puts in their pipeline.
+#
+#   - uses: danielamodu/Undertow@main
+#     with:
+#       model: ${{ vars.MODEL_URN }}
+#       datahub-url: ${{ secrets.DATAHUB_GMS_URL }}
+#       datahub-token: ${{ secrets.DATAHUB_GMS_TOKEN }}
+
+inputs:
+  model:
+    description: "mlModel URN to gate. Omit when using `all`."
+    required: false
+  all:
+    description: "Gate every model listed under `models:` in the policy file."
+    required: false
+    default: "false"
+  datahub-url:
+    description: "DataHub GMS URL."
+    required: true
+  datahub-token:
+    description: "DataHub personal access token."
+    required: false
+  config:
+    description: "Path to undertow.yaml."
+    required: false
+    default: "undertow.yaml"
+  write-back:
+    description: "Record the verdict in DataHub as a native assertion."
+    required: false
+    default: "true"
+  fail-on-warn:
+    description: "Treat WARN as blocking. Off by default — a warning annotates a deploy."
+    required: false
+    default: "false"
+  use-mcp:
+    description: "Resolve lineage through the DataHub MCP server rather than the SDK."
+    required: false
+    default: "false"
+  anthropic-api-key:
+    description: "Enables the investigation loop. Never changes the verdict."
+    required: false
+  version:
+    description: "Git ref of Undertow to install."
+    required: false
+    default: "main"
+
+outputs:
+  verdict:
+    description: "CLEAR, WARN, or BLOCK."
+    value: ${{ steps.gate.outputs.verdict }}
+  exit-code:
+    description: "0 proceed, 1 blocked, 2 the gate could not produce a verdict."
+    value: ${{ steps.gate.outputs.exit-code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Undertow
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        if [ "${{ inputs.use-mcp }}" = "true" ]; then
+          extras="[mcp]"
+        else
+          extras=""
+        fi
+        pip install "undertow${extras} @ git+https://github.com/danielamodu/Undertow@${{ inputs.version }}"
+
+    - name: Check inputs
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.model }}" ] && [ "${{ inputs.all }}" != "true" ]; then
+          echo "::error::Set `model` to a model URN, or `all: true` to use the inventory in ${{ inputs.config }}."
+          exit 1
+        fi
+        if [ -z "${{ inputs.datahub-url }}" ]; then
+          echo "::error::datahub-url is required. Undertow resolves lineage from a live DataHub."
+          exit 1
+        fi
+
+    - name: Gate
+      id: gate
+      shell: bash
+      env:
+        DATAHUB_GMS_URL: ${{ inputs.datahub-url }}
+        DATAHUB_GMS_TOKEN: ${{ inputs.datahub-token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+      run: |
+        args=(check --config "${{ inputs.config }}")
+        if [ "${{ inputs.all }}" = "true" ]; then
+          args+=(--all)
+        else
+          args+=(--model "${{ inputs.model }}")
+        fi
+        [ "${{ inputs.write-back }}" = "true" ]  && args+=(--write-back)
+        [ "${{ inputs.fail-on-warn }}" = "true" ] && args+=(--fail-on-warn)
+        [ "${{ inputs.use-mcp }}" = "true" ]      && args+=(--mcp)
+        if [ "${{ inputs.use-mcp }}" = "true" ] && [ -n "${{ inputs.anthropic-api-key }}" ]; then
+          args+=(--investigate)
+        fi
+
+        # The exit code is the contract, so it is captured rather than allowed to
+        # abort the step: 1 and 2 mean different things and the caller has to be
+        # able to tell them apart.
+        set +e
+        undertow "${args[@]}"
+        code=$?
+        set -e
+
+        case "$code" in
+          0) verdict=CLEAR ;;
+          1) verdict=BLOCK ;;
+          *) verdict=ERROR ;;
+        esac
+        echo "verdict=$verdict"   >> "$GITHUB_OUTPUT"
+        echo "exit-code=$code"    >> "$GITHUB_OUTPUT"
+
+        if [ "$code" = "2" ]; then
+          echo "::error::Undertow could not produce a verdict. This is not a pass — check DATAHUB_GMS_URL, the token, and the model URN."
+        fi
+        exit "$code"

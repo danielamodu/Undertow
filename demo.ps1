@@ -44,6 +44,7 @@ function Show-Help {
         @("break-governance", "Deprecate upstream, tag staging PII  (BLOCK + WARN)"),
         @("check",            "Gate the fraud model"),
         @("check-churn",      "Gate the churn model"),
+        @("check-all",        "Gate every model in the undertow.yaml inventory"),
         @("blast-radius",     "Gate both - one column, two teams"),
         @("check-warn",       "Gate after drift: WARN, exit 0"),
         @("check-write",      "Gate and write the verdict back to DataHub"),
@@ -75,6 +76,7 @@ switch ($Target) {
     "break-governance" { python scripts/break_governance.py }
     "check"            { undertow check --model "$FRAUD" }
     "check-churn"      { undertow check --model "$CHURN" }
+    "check-all"        { undertow check --all }
     "check-warn"       { undertow check --model "$FRAUD" }
     "blast-radius"     {
         undertow check --model "$FRAUD"

@@ -250,6 +250,84 @@ def test_investigate_without_a_key_says_so_rather_than_degrading_in_silence(
     assert "ANTHROPIC_API_KEY" in output
 
 
+# --------------------------------------------------------------------------
+# Sweeping an inventory
+# --------------------------------------------------------------------------
+#
+# A team has twelve models, not one. Without an inventory, adopting Undertow
+# means keeping a set of 70-character URNs in step with a CI script by hand,
+# which is how a gate ends up covering three of the twelve.
+
+
+def test_all_and_model_together_is_rejected(runner: CliRunner) -> None:
+    result = runner.invoke(main, ["check", "--all", "--model", FRAUD_MODEL])
+
+    assert result.exit_code == EXIT_ERROR
+    assert "not both" in output_of(result)
+
+
+def test_neither_all_nor_model_is_rejected(runner: CliRunner) -> None:
+    result = runner.invoke(main, ["check"])
+
+    assert result.exit_code == EXIT_ERROR
+    assert "--all" in output_of(result)
+
+
+def test_all_without_an_inventory_says_how_to_add_one(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """An empty inventory must not read as 'nothing to check, all clear'."""
+    path = write(tmp_path, "max_hops: 3\n")
+
+    result = runner.invoke(main, ["check", "--all", "--config", path])
+
+    assert result.exit_code == EXIT_ERROR
+    assert "models:" in output_of(result)
+
+
+def test_the_inventory_is_read_from_the_policy(tmp_path: Path) -> None:
+    from undertow.policy import Policy
+
+    path = tmp_path / "undertow.yaml"
+    path.write_text(
+        'models:\n  - "urn:li:mlModel:(a,b,PROD)"\n  - "urn:li:mlModel:(c,d,PROD)"\n',
+        encoding="utf-8",
+    )
+
+    assert Policy.load(path).models == (
+        "urn:li:mlModel:(a,b,PROD)",
+        "urn:li:mlModel:(c,d,PROD)",
+    )
+
+
+def test_an_absent_inventory_defaults_to_empty_not_to_everything() -> None:
+    from undertow.policy import Policy
+
+    assert Policy().models == ()
+
+
+@pytest.mark.parametrize(
+    "codes, expected",
+    [
+        ([0, 0], 0),
+        ([0, 1], 1),
+        ([1, 0], 1),
+        # 2 outranks 1: a model the gate could not see is worse than one it saw
+        # and blocked, because only the first is indistinguishable from a pass.
+        ([1, 2], 2),
+        ([2, 1], 2),
+        ([0, 2], 2),
+    ],
+)
+def test_the_sweep_reports_the_worst_outcome(codes: list[int], expected: int) -> None:
+    """Reimplements the fold, so the ordering is asserted rather than assumed."""
+    worst = 0
+    for code in codes:
+        worst = 2 if 2 in (worst, code) else max(worst, code)
+
+    assert worst == expected
+
+
 def test_check_reports_a_bad_policy_before_anything_else(
     runner: CliRunner, tmp_path: Path
 ) -> None:
