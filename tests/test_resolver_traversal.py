@@ -186,6 +186,32 @@ def test_feature_tables_are_excluded_from_lineage_path() -> None:
     assert FEATURE_TABLE not in footprint.snapshot.assets
 
 
+def test_profiles_are_only_fetched_for_datasets() -> None:
+    """Asking GMS for a dataset profile about an mlModel costs ~28 seconds.
+
+    `datasetProfile` is a dataset aspect. GMS answers a request for one about a
+    feature or a model eventually, with nothing, after the SDK has retried. A
+    six-asset footprint spent 85 of 87 seconds on three such calls.
+
+    The traversal must not make them at all.
+    """
+    asked: list[str] = []
+
+    class ProfileWatchingSource(MockLineageSource):
+        def get_latest_profile(self, urn: str) -> dict[str, object] | None:
+            asked.append(urn)
+            return None
+
+    resolve_footprint(MODEL_URN, ProfileWatchingSource(), max_hops=5)
+
+    assert asked, "no profiles were fetched at all"
+    non_datasets = [u for u in asked if ":dataset:" not in u]
+    assert not non_datasets, (
+        f"asked for dataset profiles about {non_datasets}, which costs seconds each "
+        "and can only ever return None"
+    )
+
+
 def test_max_hops_is_respected() -> None:
     source = MockLineageSource()
     footprint = resolve_footprint(MODEL_URN, source, max_hops=1)

@@ -53,8 +53,7 @@ check-write:
 # fraud team's change breaks a model the churn team owns, and neither of them
 # knows the other exists.
 blast-radius:
-	-undertow check --model "$(FRAUD)"
-	-undertow check --model "$(CHURN)"
+	undertow check --all
 
 # The pre-merge check: what does this SQL change break, before it merges?
 impact:

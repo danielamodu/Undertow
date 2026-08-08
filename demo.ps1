@@ -78,10 +78,9 @@ switch ($Target) {
     "check-churn"      { undertow check --model "$CHURN" }
     "check-all"        { undertow check --all }
     "check-warn"       { undertow check --model "$FRAUD" }
-    "blast-radius"     {
-        undertow check --model "$FRAUD"
-        undertow check --model "$CHURN"
-    }
+    # One process, not two: the sweep shares a single interpreter start and a
+    # single DataHub client, which halves the wait on camera.
+    "blast-radius"     { undertow check --all }
     "check-write"      { undertow check --model "$FRAUD" --write-back }
     "check-mcp"        { undertow check --model "$FRAUD" --mcp }
     "check-investigate"{ undertow check --model "$FRAUD" --mcp --investigate }

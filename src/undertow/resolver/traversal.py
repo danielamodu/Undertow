@@ -316,7 +316,14 @@ def _build_asset_snapshot(
     # `get_latest_profile`; without it the footprint is simply unprofiled, and
     # `profile_coverage` reports that honestly rather than reading silence as
     # "no drift".
-    if profile is None:
+    #
+    # Only datasets are asked. `datasetProfile` is a dataset aspect by
+    # definition, and GMS does not answer quickly when asked for one about an
+    # mlModel — it takes ~28 seconds to come back with nothing. A six-asset
+    # footprint of three datasets, two features and a model spent 85 of its 87
+    # seconds waiting for three of those, all to be told None. The guard is one
+    # line; the cost of not having it grows with every feature a model consumes.
+    if profile is None and entity_type == "dataset":
         fetch = getattr(source, "get_latest_profile", None)
         if callable(fetch):
             raw = fetch(urn)
