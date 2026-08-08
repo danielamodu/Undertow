@@ -177,6 +177,7 @@ def investigate_findings(
     max_turns: int = 6,
     max_findings: int = 3,
     on_skip: Callable[[str], None] | None = None,
+    on_tool_call: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> list[Finding]:
     """Enrich findings with investigated context. Never changes severity.
 
@@ -188,6 +189,13 @@ def investigate_findings(
     `on_skip` is called with a reason when investigation cannot run at all. The
     findings still come back unchanged — enrichment failing must never fail a
     gate — but the caller gets the chance to say so out loud.
+
+    `on_tool_call` is called with (tool_name, args) the moment each call is
+    about to run, before its result comes back. Without this the loop is
+    invisible end to end: nothing prints while it runs, and the finished report
+    never showed the transcript either — a `--investigate` run looked identical
+    to one without it, which reads as "the agent does nothing" rather than "the
+    agent did real work and only the terminal hid it."
     """
     if not findings:
         return findings
@@ -206,7 +214,12 @@ def investigate_findings(
             continue
         try:
             summary, calls = _investigate_one(
-                finding, source, client=client, model=model, max_turns=max_turns
+                finding,
+                source,
+                client=client,
+                model=model,
+                max_turns=max_turns,
+                on_tool_call=on_tool_call,
             )
         except Exception as exc:  # noqa: BLE001 - enrichment must never fail a run
             evidence = dict(finding.evidence)
@@ -242,6 +255,7 @@ def _investigate_one(
     client: Any,
     model: str,
     max_turns: int,
+    on_tool_call: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> tuple[str, int]:
     """One bounded read → reason → call → read loop. Returns (summary, tool_call_count)."""
     messages: list[dict[str, Any]] = [{"role": "user", "content": _brief(finding)}]
@@ -268,6 +282,11 @@ def _investigate_one(
             if getattr(block, "type", None) != "tool_use":
                 continue
             tool_calls += 1
+            # Fired before the call runs, not after — a reader watching this
+            # scroll should see the question the moment it's asked, not the
+            # whole loop's worth of questions arriving in a burst once it ends.
+            if on_tool_call is not None:
+                on_tool_call(block.name, block.input)
             results.append(
                 {
                     "type": "tool_result",

@@ -868,12 +868,22 @@ def _gate_one(
 
             # 4. Investigate. Enrichment only — see undertow/investigator.
             if use_investigator and findings:
+
+                def _print_tool_call(tool_name: str, args: dict[str, Any]) -> None:
+                    # Printed to stderr, live, as each call happens — not after
+                    # the loop finishes. On a CI runner this is a progress log;
+                    # on a screen recording it's the only evidence the agent did
+                    # anything before the final report appears.
+                    arg_str = ", ".join(f"{k}={v!r}" for k, v in args.items())
+                    err_console.print(f"  [dim cyan]→ {tool_name}({arg_str})[/dim cyan]")
+
                 findings = investigate_findings(
                     findings,
                     source,
                     on_skip=lambda why: err_console.print(
                         f"[yellow]Investigation skipped:[/yellow] {why}"
                     ),
+                    on_tool_call=_print_tool_call,
                 )
     except _ModelUnreadable:
         return EXIT_ERROR

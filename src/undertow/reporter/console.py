@@ -10,7 +10,32 @@ from rich.text import Text
 from rich.tree import Tree
 
 from undertow.differ import ProfileCoverage
-from undertow.models import Severity, Verdict, short_urn
+from undertow.models import Finding, Severity, Verdict, short_urn
+
+
+def _append_investigation(content: Text, finding: Finding) -> None:
+    """Render what `--investigate` learned, directly under the finding it's about.
+
+    Without this, the investigation loop ran, spent real tool calls and tokens,
+    and the report looked identical to one where it never ran at all — the
+    enrichment existed only in `evidence`, a dict the console never opened. A
+    reader has no way to tell "the agent added nothing here" from "the agent
+    never ran," which is the one distinction that matters for trusting it.
+    """
+    error = finding.evidence.get("investigation_error")
+    if error:
+        content.append(f"  Investigation failed: {error}\n", style="dim red")
+        return
+
+    summary = finding.evidence.get("investigation")
+    if not summary:
+        return
+
+    calls = finding.evidence.get("investigation_tool_calls")
+    call_note = f" ({calls} tool call{'s' if calls != 1 else ''})" if calls else ""
+    content.append(f"  Investigation{call_note}:\n", style="dim cyan")
+    for line in str(summary).splitlines() or [""]:
+        content.append(f"    {line}\n", style="dim")
 
 
 def render_console(
@@ -105,6 +130,7 @@ def render_console(
                 f"  Confidence: {finding.confidence.value} ({kind_label})\n",
                 style="dim",
             )
+            _append_investigation(blocking_content, finding)
             if i < len(verdict.blocking) - 1:
                 blocking_content.append("\n" + "─" * 40 + "\n\n")
 
@@ -143,6 +169,7 @@ def render_console(
                 f"  Confidence: {finding.confidence.value} ({kind_label})\n",
                 style="dim",
             )
+            _append_investigation(warning_content, finding)
             if i < len(verdict.warnings) - 1:
                 warning_content.append("\n")
 
