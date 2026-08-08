@@ -193,7 +193,11 @@ def main() -> None:
 
     # A chain deeper than max_hops, to prove the bound binds.
     previous = dataset("deep_00")
-    emit(MetadataChangeProposalWrapper(entityUrn=previous, aspect=schema_for("deep_00", ["amount"])))
+    emit(
+        MetadataChangeProposalWrapper(
+            entityUrn=previous, aspect=schema_for("deep_00", ["amount"])
+        )
+    )
     for depth in range(1, DEEP_CHAIN):
         current = dataset(f"deep_{depth:02d}")
         emit(
