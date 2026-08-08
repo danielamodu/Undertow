@@ -11,12 +11,20 @@ read at 720p — bump it two sizes past comfortable.
 
 ## Before you record
 
-```bash
-make reset && make baseline          # clean graph, approved state
-export COLUMNS=95                    # keeps the boxes from wrapping
+Windows does not ship `make`. Use `.\demo.ps1 <target>` — same target names, no
+install. On macOS or Linux the `make <target>` equivalents work identically.
+
+Reset to a clean, approved state:
+
+```powershell
+.\demo.ps1 reset
+.\demo.ps1 baseline
 ```
 
 Have a browser tab open on `http://localhost:9002` at `fraud_detector_v3`.
+
+Short commands read better on camera than a 70-character URN, which is the only
+reason this script exists.
 
 ---
 
@@ -43,9 +51,9 @@ This is 12 seconds and it removes the single biggest credibility risk. Do not cu
 
 ## 0:30–1:05 — The break, and the blast radius
 
-```bash
-make break
-make blast-radius
+```powershell
+.\demo.ps1 break
+.\demo.ps1 blast-radius
 ```
 
 **On screen:** both red BLOCK boxes. Let them sit. This is the money shot.
@@ -60,10 +68,11 @@ Point at `@data_eng_tom` on screen.
 
 ## 1:05–1:25 — Certain versus probable
 
-```bash
-make reset && make baseline
-make break-stats
-make check
+```powershell
+.\demo.ps1 reset
+.\demo.ps1 baseline
+.\demo.ps1 break-stats
+.\demo.ps1 check
 ```
 
 **On screen:** the yellow WARN, exit 0.
@@ -79,8 +88,8 @@ Point at the last line.
 
 ## 1:25–1:50 — The agent
 
-```bash
-make check-investigate
+```powershell
+.\demo.ps1 check-investigate
 ```
 
 **On screen:** the investigation context attached to the finding.
@@ -99,8 +108,8 @@ That constraint is the most interesting thing in the project. Say it slowly.
 
 ## 1:50–2:10 — It writes back
 
-```bash
-make check-write
+```powershell
+.\demo.ps1 check-write
 ```
 
 **On screen:** switch to the browser, refresh the model in DataHub. Show the
@@ -111,7 +120,7 @@ make check-write
 > starts from what the last one learned —"
 
 ```bash
-make history
+.\demo.ps1 history
 ```
 
 > "— including the whole history, because assertion run events accumulate."
@@ -149,7 +158,7 @@ Optional, if you have room and want the engineering line:
 ## Cut order, if you run long
 
 1. The engineering line at 2:40
-2. `make history` at 2:05
+2. `.\demo.ps1 history` at 2:05
 3. `undertow impact` at 2:10
 
 **Never cut:** the DataHub credit at 0:18, the blast radius at 0:30, or the

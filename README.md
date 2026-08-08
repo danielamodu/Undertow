@@ -71,6 +71,8 @@ pip install -e ".[dev]"
 undertow demo
 ```
 
+Works from any directory once installed, on Windows, macOS or Linux — no `make`, no shell assumptions.
+
 That runs the whole gate — CLEAR on the approved graph, then a dropped column, then BLOCK on two models owned by two different teams — with no Docker, no DataHub, and no API key.
 
 It replays a graph **recorded from a live DataHub OSS v1.7.0** by [`scripts/record_fixture.py`](scripts/record_fixture.py): every entity, edge, schema and profile the resolver was given, captured and handed back. The differs, attribution, policy engine, reporter and exit codes are the same code a live run uses, on the same data. What it does *not* exercise is the resolver's ability to talk to DataHub — that needs `--mcp` or the SDK path against a real instance, which is what CI and `make demo` do. The command says so on every run.
@@ -178,6 +180,9 @@ make reset
 ```
 
 ### Commands
+
+Windows does not ship `make`, so every target below also exists as
+`.\demo.ps1 <target>` — same names, no install. Run `.\demo.ps1 help` for the list.
 
 | Command | What it does |
 |---|---|
