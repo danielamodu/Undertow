@@ -132,7 +132,7 @@ Useful additions:
 
 | Flag | When |
 | --- | --- |
-| `--investigate` | Adds an agent loop that gathers context — what SQL reads the column, whether the change was documented. Requires `--mcp` and `ANTHROPIC_API_KEY`. Cannot change the verdict. |
+| `--investigate` | Adds an agent loop that gathers context — what SQL reads the column, whether the change was documented. Requires `--mcp` and one LLM provider: `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, or `LLM_API_KEY`+`LLM_BASE_URL`+`LLM_MODEL`. Cannot change the verdict. |
 | `--write-back` | Records the verdict in DataHub as a native assertion, tags, and structured properties. Use when the run is authoritative, not while exploring. |
 | `--fail-on-warn` | Treats WARN as blocking. Off by default. |
 

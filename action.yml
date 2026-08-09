@@ -47,8 +47,27 @@ inputs:
     description: "Resolve lineage through the DataHub MCP server rather than the SDK."
     required: false
     default: "false"
+  # Any one of these enables --investigate (needs use-mcp: true too — the
+  # investigation tools only exist on the MCP server). Anthropic is checked
+  # first if more than one is set; see undertow/investigator for the full
+  # order. None of them can ever change the verdict — they only add context.
   anthropic-api-key:
-    description: "Enables the investigation loop. Never changes the verdict."
+    description: "Enables the investigation loop via Anthropic. Never changes the verdict."
+    required: false
+  groq-api-key:
+    description: "Enables the investigation loop via Groq (OpenAI-compatible, free tier available)."
+    required: false
+  openrouter-api-key:
+    description: "Enables the investigation loop via OpenRouter."
+    required: false
+  llm-api-key:
+    description: "Enables the investigation loop via any other OpenAI-compatible endpoint. Requires llm-base-url and llm-model."
+    required: false
+  llm-base-url:
+    description: "Base URL for llm-api-key's endpoint."
+    required: false
+  llm-model:
+    description: "Model name for llm-api-key's endpoint."
     required: false
   version:
     description: "Git ref of Undertow to install."
@@ -93,12 +112,26 @@ runs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
+        # Built up rather than hardcoded to `[mcp]`: the `llm` extra was never
+        # added here at all, for any input, which meant --investigate could
+        # never actually run through this Action regardless of which key was
+        # set — the flag would ask for it, and the package that makes the API
+        # call would not be installed. Both extras are additive, so this only
+        # ever installs what a given run's inputs can actually use.
+        extras=()
         if [ "${{ inputs.use-mcp }}" = "true" ]; then
-          extras="[mcp]"
-        else
-          extras=""
+          extras+=("mcp")
         fi
-        pip install "undertow${extras} @ git+https://github.com/danielamodu/Undertow@${{ inputs.version }}"
+        if [ -n "${{ inputs.anthropic-api-key }}" ] || [ -n "${{ inputs.groq-api-key }}" ] \
+           || [ -n "${{ inputs.openrouter-api-key }}" ] || [ -n "${{ inputs.llm-api-key }}" ]; then
+          extras+=("llm")
+        fi
+        suffix=""
+        if [ "${#extras[@]}" -gt 0 ]; then
+          joined=$(IFS=,; echo "${extras[*]}")
+          suffix="[$joined]"
+        fi
+        pip install "undertow${suffix} @ git+https://github.com/danielamodu/Undertow@${{ inputs.version }}"
 
     - name: Gate
       id: gate
@@ -107,6 +140,11 @@ runs:
         DATAHUB_GMS_URL: ${{ inputs.datahub-url }}
         DATAHUB_GMS_TOKEN: ${{ inputs.datahub-token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+        LLM_API_KEY: ${{ inputs.llm-api-key }}
+        LLM_BASE_URL: ${{ inputs.llm-base-url }}
+        LLM_MODEL: ${{ inputs.llm-model }}
       run: |
         # `if` rather than `[ ... ] && ...`. GitHub runs this with `set -e`, and
         # a `&&` list whose left side is false returns non-zero — which kills
@@ -122,7 +160,9 @@ runs:
         if [ "${{ inputs.write-back }}" = "true" ]; then args+=(--write-back); fi
         if [ "${{ inputs.fail-on-warn }}" = "true" ]; then args+=(--fail-on-warn); fi
         if [ "${{ inputs.use-mcp }}" = "true" ]; then args+=(--mcp); fi
-        if [ "${{ inputs.use-mcp }}" = "true" ] && [ -n "${{ inputs.anthropic-api-key }}" ]; then
+        if [ "${{ inputs.use-mcp }}" = "true" ] && { [ -n "${{ inputs.anthropic-api-key }}" ] \
+           || [ -n "${{ inputs.groq-api-key }}" ] || [ -n "${{ inputs.openrouter-api-key }}" ] \
+           || [ -n "${{ inputs.llm-api-key }}" ]; }; then
           args+=(--investigate)
         fi
 

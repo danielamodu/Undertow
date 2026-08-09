@@ -43,7 +43,11 @@ mcp = [
 # `--investigate` and LLM narration. Optional by design: the reporter falls back
 # to templates and the investigator skips, so a missing key degrades prose and
 # context, never the verdict.
-llm = ["anthropic>=0.40,<1"]
+#
+# Two SDKs, not one: `anthropic` for the default provider, `openai` for the
+# Groq/OpenRouter/generic path — everything that isn't Anthropic speaks the
+# OpenAI-compatible wire format, so one client library covers all of them.
+llm = ["anthropic>=0.40,<1", "openai>=1.0,<2"]
 # Retained so `pip install undertow[narrator]` keeps working.
 narrator = ["anthropic>=0.40,<1"]
 # Everything a reviewer needs to exercise every documented command. `[dev]` is
@@ -54,6 +58,7 @@ dev = [
     "mcp>=1.0,<2",
     "mcp-server-datahub>=0.6,<1",
     "anthropic>=0.40,<1",
+    "openai>=1.0,<2",
     # `make seed` derives the fixture's lineage by running DataHub's SQL parser
     # over scripts/sql/. That parser needs sqlglot, which ships in this extra
     # rather than the base package. Undertow itself never imports it.

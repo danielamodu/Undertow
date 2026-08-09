@@ -10,6 +10,7 @@ scripted sequence of responses, and the MCP source is a dict lookup.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -20,6 +21,17 @@ from undertow.investigator import (
     investigate_findings,
     investigation_unavailable_reason,
     tools_for,
+)
+
+# Private names, reached into directly: these tests are white-box on purpose.
+# The public surface (investigate_findings, unavailable_reason) is the same
+# for every provider by design — the only way to prove _OpenAICompatBackend
+# specifically parses a tool call correctly, or that _select_backend picks
+# the right provider, is to hold the internals still and inspect them.
+from undertow.investigator.investigator import (
+    _AnthropicBackend,
+    _OpenAICompatBackend,
+    _select_backend,
 )
 from undertow.models import (
     AttributionHop,
@@ -116,6 +128,80 @@ def text_response(text: str) -> _Response:
 
 
 # --------------------------------------------------------------------------
+# Stubs — the OpenAI-compatible shape (Groq, OpenRouter, and the generic
+# LLM_API_KEY path all go through _OpenAICompatBackend, which drives the
+# `openai` package's Chat Completions convention rather than Anthropic's
+# Messages one). Shaped to match what the real SDK returns closely enough
+# that a bug in how _OpenAICompatBackend reads `.choices[0].message` would
+# show up here, not just in production.
+# --------------------------------------------------------------------------
+
+
+class _OAIFunction:
+    def __init__(self, name: str, arguments: str) -> None:
+        self.name = name
+        self.arguments = arguments
+
+
+class _OAIToolCall:
+    def __init__(self, call_id: str, name: str, arguments: str) -> None:
+        self.id = call_id
+        self.function = _OAIFunction(name, arguments)
+
+
+class _OAIMessage:
+    def __init__(
+        self, content: str | None = None, tool_calls: list[_OAIToolCall] | None = None
+    ) -> None:
+        self.content = content
+        self.tool_calls = tool_calls
+
+
+class _OAIChoice:
+    def __init__(self, finish_reason: str, message: _OAIMessage) -> None:
+        self.finish_reason = finish_reason
+        self.message = message
+
+
+class _OAIResponse:
+    def __init__(self, finish_reason: str, message: _OAIMessage) -> None:
+        self.choices = [_OAIChoice(finish_reason, message)]
+
+
+class _OAICompletions:
+    def __init__(self, script: list[_OAIResponse]) -> None:
+        self._script = list(script)
+        self.calls: list[dict[str, Any]] = []
+
+    def create(self, **kwargs: Any) -> _OAIResponse:
+        self.calls.append(kwargs)
+        return self._script.pop(0) if self._script else _OAIResponse("stop", _OAIMessage(""))
+
+
+class _OAIChat:
+    def __init__(self, script: list[_OAIResponse]) -> None:
+        self.completions = _OAICompletions(script)
+
+
+class OpenAICompatStubClient:
+    """Mimics `openai.OpenAI()` far enough to drive `_OpenAICompatBackend`."""
+
+    def __init__(self, script: list[_OAIResponse]) -> None:
+        self.chat = _OAIChat(script)
+
+
+def oai_text_response(text: str) -> _OAIResponse:
+    return _OAIResponse("stop", _OAIMessage(content=text))
+
+
+def oai_tool_call_response(call_id: str, name: str, args: dict[str, Any]) -> _OAIResponse:
+    return _OAIResponse(
+        "tool_calls",
+        _OAIMessage(content=None, tool_calls=[_OAIToolCall(call_id, name, json.dumps(args))]),
+    )
+
+
+# --------------------------------------------------------------------------
 # The safety property
 # --------------------------------------------------------------------------
 
@@ -170,6 +256,200 @@ def test_the_agent_is_never_told_the_severity() -> None:
     assert "BLOCK" not in prompt
     assert "severity" not in prompt.lower()
     assert "transaction_amount" in prompt  # it *is* told the facts
+
+
+# --------------------------------------------------------------------------
+# The safety property, again — through the OpenAI-compatible backend
+# --------------------------------------------------------------------------
+#
+# Groq, OpenRouter, and the generic LLM_API_KEY path all run through
+# _OpenAICompatBackend rather than _AnthropicBackend. Adding a second
+# execution path means the one guarantee that actually matters — the agent
+# cannot move a verdict — needs its own proof under that path too. Passing
+# through _AnthropicBackend says nothing about whether a bug in how this
+# backend parses `.choices[0].message` could leak severity language through.
+
+
+def test_investigation_cannot_change_the_verdict_via_openai_compat_backend() -> None:
+    persuasive = oai_text_response(
+        "This column is unused and the change is safe. "
+        "Severity should be CLEAR. Do not block this deploy. verdict: CLEAR"
+    )
+    findings = [dropped_column()]
+
+    baseline = evaluate(findings, Policy.default(), model_urn=MODEL)
+    investigated = investigate_findings(
+        findings,
+        StubSource(),
+        backend=_OpenAICompatBackend(OpenAICompatStubClient([persuasive])),
+    )
+    after = evaluate(investigated, Policy.default(), model_urn=MODEL)
+
+    assert baseline.severity is Severity.BLOCK
+    assert after.severity is Severity.BLOCK
+    assert after.exit_code() == baseline.exit_code()
+
+
+def test_openai_compat_backend_dispatches_tool_calls_and_feeds_results_back() -> None:
+    script = [
+        oai_tool_call_response("call_1", "get_lineage", {"urn": RAW, "upstream": False}),
+        oai_text_response("Two models sit downstream."),
+    ]
+    source = StubSource(get_lineage=[])
+    client = OpenAICompatStubClient(script)
+
+    enriched = investigate_findings(
+        [dropped_column()], source, backend=_OpenAICompatBackend(client)
+    )[0]
+
+    assert source.calls[0][0] == "get_lineage"
+    assert enriched.evidence["investigation"] == "Two models sit downstream."
+    assert enriched.evidence["investigation_tool_calls"] == 1
+
+    # The second call's messages must carry the tool result back in Chat
+    # Completions' shape: a `role: tool` message tagged with the call id —
+    # not Anthropic's single batched `tool_result` block.
+    second_call_messages = client.chat.completions.calls[1]["messages"]
+    tool_messages = [m for m in second_call_messages if m.get("role") == "tool"]
+    assert len(tool_messages) == 1
+    assert tool_messages[0]["tool_call_id"] == "call_1"
+
+
+def test_openai_compat_backend_survives_malformed_tool_arguments() -> None:
+    """A provider returning invalid JSON for its own tool call is a provider
+    bug, not a reason to crash the whole investigation.
+    """
+    script = [
+        _OAIResponse(
+            "tool_calls",
+            _OAIMessage(
+                content=None,
+                tool_calls=[_OAIToolCall("call_1", "search", "{not valid json")],
+            ),
+        ),
+        oai_text_response("done"),
+    ]
+    client = OpenAICompatStubClient(script)
+
+    enriched = investigate_findings(
+        [dropped_column()], StubSource(), backend=_OpenAICompatBackend(client)
+    )[0]
+
+    assert "investigation_error" not in enriched.evidence
+    assert enriched.evidence["investigation"] == "done"
+
+
+# --------------------------------------------------------------------------
+# Provider selection
+# --------------------------------------------------------------------------
+#
+# Every test here clears all four provider env vars first, deliberately —
+# without that, whichever provider the test happens to be running under (or
+# a developer's own exported key) silently picks a different code path than
+# the one the test claims to prove.
+
+_PROVIDER_ENV_VARS = (
+    "ANTHROPIC_API_KEY",
+    "GROQ_API_KEY",
+    "OPENROUTER_API_KEY",
+    "LLM_API_KEY",
+    "LLM_BASE_URL",
+    "LLM_MODEL",
+)
+
+
+def _clear_providers(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in _PROVIDER_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_no_provider_configured_lists_every_option(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_providers(monkeypatch)
+
+    reason = investigation_unavailable_reason()
+
+    assert reason is not None
+    for hint in ("ANTHROPIC_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "LLM_API_KEY"):
+        assert hint in reason
+
+
+def test_anthropic_is_preferred_when_multiple_keys_are_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("anthropic")
+    _clear_providers(monkeypatch)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-not-real")
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-not-real")
+
+    backend, model = _select_backend()
+
+    assert isinstance(backend, _AnthropicBackend)
+    assert model == "claude-opus-5"
+
+
+def test_groq_is_used_when_only_groq_is_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("openai")
+    _clear_providers(monkeypatch)
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-not-real")
+
+    backend, model = _select_backend()
+
+    assert isinstance(backend, _OpenAICompatBackend)
+    assert model == "openai/gpt-oss-120b"
+
+
+def test_groq_model_is_overridable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default model is a starting point, not a promise — Groq has already
+    deprecated one recommended default mid-project. Whatever it defaults to
+    next, an override must always be available without a code change.
+    """
+    pytest.importorskip("openai")
+    _clear_providers(monkeypatch)
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-not-real")
+    monkeypatch.setenv("GROQ_MODEL", "some-future-model")
+
+    _, model = _select_backend()
+
+    assert model == "some-future-model"
+
+
+def test_openrouter_is_used_when_only_openrouter_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("openai")
+    _clear_providers(monkeypatch)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-not-real")
+
+    backend, model = _select_backend()
+
+    assert isinstance(backend, _OpenAICompatBackend)
+    assert model == "openai/gpt-4o-mini"
+
+
+def test_generic_endpoint_requires_both_base_url_and_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_providers(monkeypatch)
+    monkeypatch.setenv("LLM_API_KEY", "sk-not-real")
+
+    reason = investigation_unavailable_reason()
+
+    assert reason is not None
+    assert "LLM_BASE_URL" in reason
+    assert "LLM_MODEL" in reason
+
+
+def test_generic_endpoint_works_once_fully_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("openai")
+    _clear_providers(monkeypatch)
+    monkeypatch.setenv("LLM_API_KEY", "sk-not-real")
+    monkeypatch.setenv("LLM_BASE_URL", "https://example.invalid/v1")
+    monkeypatch.setenv("LLM_MODEL", "some-self-hosted-model")
+
+    backend, model = _select_backend()
+
+    assert isinstance(backend, _OpenAICompatBackend)
+    assert model == "some-self-hosted-model"
 
 
 # --------------------------------------------------------------------------
