@@ -20,6 +20,8 @@ Or clone it and install from source — `pip install -e ".[dev]"` pulls in every
 
 Requires Python 3.11+ and a DataHub instance with lineage ingested for the models you want to gate. See [DataHub integration details](#datahub-integration-details) for what Undertow expects to find there.
 
+Undertow loads a `.env` file on its own — `cp .env.example .env`, fill in `DATAHUB_GMS_URL` and whichever LLM provider key you're using, and every command in this README picks it up without exporting anything into the shell first. Already-exported environment variables still win over the file.
+
 ## Try it with no DataHub connection
 
 ```

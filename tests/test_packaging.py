@@ -47,6 +47,7 @@ DISTRIBUTION_OF = {
     # parse scripts/sql/. It is never imported by name here, only through
     # `datahub.sql_parsing`, so it maps onto the distribution that supplies it.
     "sqlglot": "acryl-datahub",
+    "dotenv": "python-dotenv",
 }
 
 # Never imported — launched as `python -m mcp_server_datahub` — so no amount of
@@ -150,7 +151,15 @@ def test_the_cli_starts_on_a_core_install(pyproject: dict[str, Any]) -> None:
     """
     core = distributions_in(pyproject["project"]["dependencies"])
 
-    import_time = {"click", "rich", "pydantic", "pyyaml", "acryl-datahub", "jinja2"}
+    import_time = {
+        "click",
+        "rich",
+        "pydantic",
+        "pyyaml",
+        "acryl-datahub",
+        "jinja2",
+        "python-dotenv",
+    }
     missing = import_time - core
 
     assert not missing, (

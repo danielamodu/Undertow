@@ -30,6 +30,11 @@ dependencies = [
     # present transitively" is exactly the assumption that broke `--mcp` before —
     # anything imported by name gets declared by name.
     "requests>=2.31,<3",
+    # Core, not optional: loaded at module scope by the CLI, the first thing it
+    # does. Without it, ANTHROPIC_API_KEY / GROQ_API_KEY / etc. only work if
+    # exported in the shell every session — a `.env` file is what most people
+    # actually reach for, and it should work on a bare install.
+    "python-dotenv>=1.0,<2",
 ]
 
 [project.optional-dependencies]

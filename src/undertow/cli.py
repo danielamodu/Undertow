@@ -21,6 +21,7 @@ from typing import Any
 
 import click
 from datahub.emitter.rest_emitter import DatahubRestEmitter
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
@@ -47,6 +48,15 @@ from undertow.resolver import (
 )
 from undertow.resolver.base import LineageSource
 from undertow.resolver.profiles import TimeseriesProfileReader
+
+# Loaded once, at the actual entry point, before any command reads an env var
+# — not inside a library module, where the side effect would surprise anyone
+# embedding undertow.investigator or undertow.resolver directly. Walks up
+# from the current directory looking for `.env`, so it works whether you run
+# `undertow` from the repo root or a subdirectory. Already-set variables in
+# the real environment win over the file, matching every other tool that
+# does this (`$env:X` in your shell beats a stale `.env`).
+load_dotenv()
 
 # The verdict box is drawn with box-drawing characters and the report carries
 # owner handles, so a console that cannot encode UTF-8 turns a BLOCK into a
