@@ -30,6 +30,7 @@ if (-not $env:COLUMNS) { $env:COLUMNS = "95" }
 
 $FRAUD = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
 $CHURN = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)"
+$RAW = "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)"
 
 function Show-Help {
     Write-Host ""
@@ -50,8 +51,9 @@ function Show-Help {
         @("check-write",      "Gate and write the verdict back to DataHub"),
         @("check-mcp",        "Resolve through the DataHub MCP server"),
         @("check-investigate","Add the agent investigation loop"),
-        @("history",          "Every recorded verdict, read back from DataHub"),
+        @("history",          "Every recorded verdict, read back from DataHub, plus policy suggestions"),
         @("impact",           "Check a proposed SQL change before it merges"),
+        @("what-if",          "Ask what dropping transaction_amount would break, no SQL file needed"),
         @("reset",            "Restore the graph"),
         @("record",           "Re-record the offline fixture from a live instance"),
         @("test",             "Run the test suite"),
@@ -86,6 +88,7 @@ switch ($Target) {
     "check-investigate"{ undertow check --model "$FRAUD" --mcp --investigate }
     "history"          { undertow history --model "$FRAUD" }
     "impact"           { undertow impact examples/pr-drops-amount.sql }
+    "what-if"          { undertow what-if "$RAW" transaction_amount }
     "reset"            { python scripts/reset_demo.py }
     "record"           { python scripts/record_fixture.py }
     "test"             {

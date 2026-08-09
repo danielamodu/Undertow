@@ -126,6 +126,14 @@ def create_verdict_mcps(
                 "blocking_count": str(len(verdict.blocking)),
                 "warning_count": str(len(verdict.warnings)),
                 "assets_checked": str(verdict.assets_checked),
+                # Which kinds of finding warned this run, not just how many —
+                # additive to a schema that used to only count. Runs written
+                # before this field existed simply lack the key; history.py's
+                # reader treats that identically to "no warnings recorded",
+                # which was already true of them.
+                "warning_kinds": ",".join(
+                    sorted({rf.finding.kind.value for rf in verdict.warnings})
+                ),
             },
         ),
     )

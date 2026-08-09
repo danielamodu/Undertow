@@ -49,6 +49,10 @@ class VerdictRun:
     warning: int
     assets_checked: int
     run_id: str
+    # Which FindingKind values warned this run. Empty on runs written before
+    # this field existed, or on runs with no warnings — both read the same
+    # way to a caller, which is correct: neither has anything to report.
+    warning_kinds: tuple[str, ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -75,6 +79,8 @@ def _to_run(event: Any) -> VerdictRun | None:
     native: dict[str, Any] = getattr(result, "nativeResults", None) or {}
     millis = getattr(event, "timestampMillis", 0) or 0
 
+    kinds = tuple(k for k in str(native.get("warning_kinds", "")).split(",") if k)
+
     return VerdictRun(
         checked_at=datetime.fromtimestamp(millis / 1000, tz=UTC),
         result=str(getattr(result, "type", "") or ""),
@@ -83,6 +89,7 @@ def _to_run(event: Any) -> VerdictRun | None:
         warning=_int(native, "warning_count"),
         assets_checked=_int(native, "assets_checked"),
         run_id=str(getattr(event, "runId", "") or ""),
+        warning_kinds=kinds,
     )
 
 

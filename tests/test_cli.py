@@ -206,6 +206,75 @@ def test_check_fails_closed_when_datahub_is_unreachable(
     assert "Cannot reach DataHub" in output_of(result)
 
 
+# --------------------------------------------------------------------------
+# what-if
+# --------------------------------------------------------------------------
+
+
+RAW_URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)"
+
+
+def test_what_if_reports_a_reached_model(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from undertow.resolver.base import LineageEdge, SchemaFieldInfo
+
+    mock_source = MagicMock()
+    mock_source.connection_error = None
+    mock_source.list_schema_fields.return_value = [
+        SchemaFieldInfo(field_path="transaction_amount", data_type="number")
+    ]
+    mock_source.get_lineage.return_value = [
+        LineageEdge(source_urn=RAW_URN, target_urn=FRAUD_MODEL, relationship="Consumes")
+    ]
+    mock_source.get_entity.return_value = None
+    monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
+
+    result = runner.invoke(main, ["what-if", RAW_URN, "transaction_amount"])
+
+    assert result.exit_code == EXIT_OK
+    assert "fraud_detector_v3" in output_of(result)
+
+
+def test_what_if_reports_nothing_downstream_cleanly(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from undertow.resolver.base import SchemaFieldInfo
+
+    mock_source = MagicMock()
+    mock_source.connection_error = None
+    mock_source.list_schema_fields.return_value = [
+        SchemaFieldInfo(field_path="transaction_amount", data_type="number")
+    ]
+    mock_source.get_lineage.return_value = []
+    monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
+
+    result = runner.invoke(main, ["what-if", RAW_URN, "transaction_amount"])
+
+    assert result.exit_code == EXIT_OK
+    assert "no models found downstream" in output_of(result)
+
+
+def test_what_if_warns_when_the_column_does_not_currently_exist(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Asking about a column DataHub doesn't have today is not an error — the
+    whole point of `what-if` is asking before the change exists to inspect.
+    """
+    from undertow.resolver.base import SchemaFieldInfo
+
+    mock_source = MagicMock()
+    mock_source.connection_error = None
+    mock_source.list_schema_fields.return_value = [
+        SchemaFieldInfo(field_path="some_other_column", data_type="number")
+    ]
+    mock_source.get_lineage.return_value = []
+    monkeypatch.setattr("undertow.cli.SdkLineageSource", lambda *args, **kwargs: mock_source)
+
+    result = runner.invoke(main, ["what-if", RAW_URN, "transaction_amount"])
+
+    assert result.exit_code == EXIT_OK
+    assert "has no column" in output_of(result)
 
 
 def test_investigate_without_mcp_says_so(

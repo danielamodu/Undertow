@@ -30,7 +30,7 @@ from undertow.attributor import attribute_findings
 from undertow.differ import diff_snapshots, profile_coverage
 from undertow.engine import PolicyViolation, evaluate, validate_policy
 from undertow.investigator import investigate_findings, investigation_unavailable_reason
-from undertow.models import FindingKind, UndertowSnapshot, short_urn
+from undertow.models import FindingKind, UndertowSnapshot, Verdict, short_urn
 from undertow.narrator import generate_narrative_detailed
 from undertow.policy import Policy
 from undertow.reporter import (
@@ -633,6 +633,61 @@ def impact(
     raise SystemExit(EXIT_BLOCK if (breaking and fail_on_impact) else EXIT_OK)
 
 
+@main.command("what-if")
+@click.argument("dataset_urn")
+@click.argument("column")
+@click.option(
+    "--mcp/--no-mcp", "use_mcp", default=False, help="Use DataHub MCP server instead of Python SDK."
+)
+@click.option("--max-hops", default=6, show_default=True, help="How far downstream to walk.")
+def what_if(dataset_urn: str, column: str, use_mcp: bool, max_hops: int) -> None:
+    """Ask what would break if `column` were dropped from `dataset_urn`.
+
+    For before there is a PR to point `impact` at.
+
+    Same downstream walk `impact` runs against a parsed SQL statement, run
+    directly against a hypothetical change instead. For planning a
+    deprecation: point this at a column you're thinking about removing, see
+    who it would reach, and go have that conversation before writing the
+    migration — not after CI blocks it.
+
+    Purely informational, like `impact` without --fail-on-impact — this asks
+    a question, it does not gate anything, so it always exits 0.
+    """
+    from undertow.impact import downstream_models
+
+    try:
+        with _lineage_source(use_mcp) as source:
+            _fail_if_unreachable(source)
+            fields = [f.field_path for f in source.list_schema_fields(dataset_urn)]
+            if column not in fields:
+                err_console.print(
+                    f"[yellow]{short_urn(dataset_urn)} has no column `{column}` in "
+                    "DataHub right now[/yellow] — checking anyway, since the point of "
+                    "this command is to ask before a change exists to inspect."
+                )
+            impacted = downstream_models(dataset_urn, source, max_hops=max_hops)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        err_console.print(f"[red]Could not walk lineage from {dataset_urn}:[/red] {exc}")
+        raise SystemExit(EXIT_ERROR) from exc
+
+    if not impacted:
+        console.print(
+            f"[green]{short_urn(dataset_urn)}.{column}[/green] — no models found downstream"
+        )
+        raise SystemExit(EXIT_OK)
+
+    console.print(f"[red]{short_urn(dataset_urn)}.{column}[/red] would reach:")
+    for model in impacted:
+        owners = ", ".join(f"@{short_urn(o)}" for o in model.owners) or "unassigned"
+        console.print(f"    {model.name} ({owners})")
+        console.print(f"      via {model.route()}", style="dim")
+
+    raise SystemExit(EXIT_OK)
+
+
 @main.command()
 @click.option("--model", "model_urn", required=True, help="mlModel URN to inspect.")
 @click.option("--limit", default=20, show_default=True, help="Most recent runs to show.")
@@ -682,6 +737,20 @@ def history(model_urn: str, limit: int) -> None:
         console.print(table)
     console.print(f"  {summarise(runs)}", style="dim")
     console.print(f"  assertion: {assertion_urn_for(model_urn)}", style="dim")
+
+    # Advisory only — reads the history just rendered above, proposes nothing
+    # more than a human reviewing undertow.yaml. Cannot touch the verdicts
+    # already written, and won't until there is enough history to mean
+    # something (see calibration._MIN_RUNS_FOR_A_SUGGESTION).
+    from undertow.calibration import format_suggestions, suggest
+
+    suggestions = suggest(runs)
+    if suggestions:
+        console.print()
+        console.print("[bold yellow]Policy suggestions[/bold yellow]")
+        for line in format_suggestions(suggestions):
+            console.print(f"  {line}", style="dim")
+
     raise SystemExit(EXIT_OK)
 
 
@@ -779,11 +848,12 @@ def check(
         # own so a failure on one cannot leave a half-torn-down MCP subprocess
         # poisoning the rest of the run.
         worst = EXIT_OK
+        verdicts: list[Verdict] = []
         for index, target in enumerate(targets):
             if index:
                 console.print()
             console.print(f"[bold]{short_urn(target)}[/bold]", style="dim")
-            code = _gate_one(
+            code, verdict = _gate_one(
                 target,
                 pol,
                 use_mcp=use_mcp,
@@ -793,27 +863,48 @@ def check(
                 fail_on_warn=fail_on_warn,
                 fatal=False,
             )
+            if verdict is not None:
+                verdicts.append(verdict)
             # Worst wins, and 2 outranks 1: a model the gate could not see is a
             # worse outcome than one it saw and blocked, because only the first
             # is indistinguishable from a pass.
             worst = 2 if 2 in (worst, code) else max(worst, code)
 
+        # Re-groups verdicts that already exist by shared root cause. Changes
+        # nothing about `worst` or any individual model's box above — this is
+        # strictly additional context for a sweep where two or more models
+        # trace back to the same broken asset, which otherwise reads as
+        # unrelated incidents instead of one.
+        from undertow.incident import correlate, format_incident_lines
+
+        incidents = correlate(verdicts)
+        if incidents:
+            console.print()
+            console.print(
+                f"[bold]{len(incidents)} incident(s) span more than one model[/bold]",
+                style="cyan",
+            )
+            for incident in incidents:
+                colour = "red" if incident.worst_severity.value == "BLOCK" else "yellow"
+                for i, line in enumerate(format_incident_lines(incident)):
+                    style = f"bold {colour}" if i == 0 else "dim"
+                    console.print(f"  {line}", style=style)
+
         console.print()
         console.print(f"  {len(targets)} model(s) checked, exit {worst}", style="dim")
         raise SystemExit(worst)
 
-    raise SystemExit(
-        _gate_one(
-            targets[0],
-            pol,
-            use_mcp=use_mcp,
-            write_back=write_back,
-            baseline_path=baseline_path,
-            use_investigator=use_investigator,
-            fail_on_warn=fail_on_warn,
-            fatal=True,
-        )
+    code, _ = _gate_one(
+        targets[0],
+        pol,
+        use_mcp=use_mcp,
+        write_back=write_back,
+        baseline_path=baseline_path,
+        use_investigator=use_investigator,
+        fail_on_warn=fail_on_warn,
+        fatal=True,
     )
+    raise SystemExit(code)
 
 
 def _gate_one(
@@ -826,13 +917,17 @@ def _gate_one(
     use_investigator: bool,
     fail_on_warn: bool,
     fatal: bool,
-) -> int:
-    """Gate one model and return its exit code.
+) -> tuple[int, Verdict | None]:
+    """Gate one model. Returns (exit_code, verdict).
 
     `fatal` decides what an error does. Checking a single model, an error should
     stop the process — that is the CI contract. Sweeping an inventory, one
     unreachable model must not hide the verdicts of the other eleven, so the
     error is reported, folded into the worst code, and the sweep continues.
+
+    `verdict` is `None` on any error path — there is nothing to hand back, and
+    nothing downstream (incident correlation) should mistake "could not check"
+    for "checked and clean."
     """
 
     if use_investigator and not use_mcp:
@@ -896,7 +991,7 @@ def _gate_one(
                     on_tool_call=_print_tool_call,
                 )
     except _ModelUnreadable:
-        return EXIT_ERROR
+        return EXIT_ERROR, None
     except SystemExit:
         raise
     except Exception as exc:
@@ -914,7 +1009,7 @@ def _gate_one(
         err_console.print(f"[red]Resolver error:[/red] {detail}")
         if fatal:
             raise SystemExit(EXIT_ERROR) from exc
-        return EXIT_ERROR
+        return EXIT_ERROR, None
 
     # 5. Policy Engine
     baseline_ref = baseline_snapshot.baseline_ref if baseline_snapshot else "none"
@@ -965,7 +1060,7 @@ def _gate_one(
                 f.write(gh_comment + "\n")
 
     # The verdict decides its own exit status; this is a hand-off, not a branch.
-    return verdict.exit_code(fail_on_warn=fail_on_warn)
+    return verdict.exit_code(fail_on_warn=fail_on_warn), verdict
 
 
 if __name__ == "__main__":

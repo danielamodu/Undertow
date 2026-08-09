@@ -225,14 +225,21 @@ Windows has no `make` — every target also exists as `.\demo.ps1 <target>` (`.\
 | `make break-governance` | Deprecate a table, tag PII |
 | `make check-warn` | Gate after drift: WARN, exit 0 |
 | `make check` | Gate the fraud model |
-| `undertow check --all` | Gate every model in `undertow.yaml` |
+| `undertow check --all` | Gate every model in `undertow.yaml` — also correlates shared root causes into one incident |
 | `make blast-radius` | Gate every downstream model |
 | `make check-write` | Gate + write verdict to DataHub |
 | `make impact` | Check a proposed SQL change pre-merge |
-| `make history` | Every recorded verdict, from DataHub |
+| `undertow what-if <dataset_urn> <column>` | Ask what a column removal would break, before there's a PR to point `impact` at |
+| `make history` | Every recorded verdict, from DataHub — with policy suggestions if a warning keeps recurring |
 | `make check-mcp` | Resolve lineage via MCP instead of SDK |
 | `make check-investigate` | Add the agent investigation loop |
 | `make reset` | Restore the graph |
+
+**Incident correlation.** `check --all` gates every model independently, exactly as before — but when two or more share a root cause, a consolidated incident prints after the individual boxes: one broken table, every model it reaches, one owner to page. Twenty models blocked by the same upstream change now read as one incident, not twenty.
+
+**`what-if`.** Point it at a column you're considering removing — no SQL file, no PR needed. Same downstream walk `impact` runs against a parsed statement, run directly against a hypothetical change instead, so you can go have the "does anyone depend on this" conversation before writing the migration. Purely informational, always exits 0.
+
+**Policy suggestions.** `undertow history` now reads its own recorded runs for a pattern: a finding kind that's warned on most of a model's recent checks is either a real ongoing problem or a threshold that no longer fits the asset. Either way it surfaces as a suggestion to review `undertow.yaml` — advisory only, the same way the investigator is. Needs at least 4 recorded runs before it says anything; a handful of dismissed warnings is a trend worth naming, one or two is noise.
 
 ## DataHub integration details
 

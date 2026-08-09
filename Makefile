@@ -1,5 +1,6 @@
 FRAUD  := urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)
 CHURN  := urn:li:mlModel:(urn:li:dataPlatform:sagemaker,churn_predictor_v1,PROD)
+RAW    := urn:li:dataset:(urn:li:dataPlatform:snowflake,transactions.raw,PROD)
 
 install:
 	pip install -e ".[dev]"
@@ -59,6 +60,10 @@ blast-radius:
 impact:
 	undertow impact examples/pr-drops-amount.sql
 
+# Ask before there's a PR to point `impact` at — no SQL file, just a column.
+what-if:
+	undertow what-if "$(RAW)" transaction_amount
+
 # Every recorded verdict for the model, read back out of DataHub. No local state.
 history:
 	undertow history --model "$(FRAUD)"
@@ -91,5 +96,5 @@ lint:
 	mypy src/
 
 .PHONY: install quickstart seed baseline break break-stats break-governance reset \
-        check check-churn check-all check-warn check-write blast-radius impact history check-mcp \
+        check check-churn check-all check-warn check-write blast-radius impact what-if history check-mcp \
         check-investigate demo demo-offline record test lint
