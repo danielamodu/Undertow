@@ -15,6 +15,7 @@ from undertow.resolver.base import (
     LineageNode,
     LineageSource,
     SchemaFieldInfo,
+    fine_grained_upstreams,
     parse_entity_type,
 )
 from undertow.resolver.profiles import TimeseriesProfileReader
@@ -145,6 +146,30 @@ class SdkLineageSource(LineageSource):
         why it is not a method on either of them.
         """
         return self._profiles.get_latest_profile(urn)
+
+    def get_column_lineage(self, urn: str, column: str, hops: int = 1) -> list[LineageEdge]:
+        """Column-level upstreams, read off this dataset's own `upstreamLineage`.
+
+        No extra query shape and no new endpoint: `fineGrainedLineages` rides on
+        an aspect `get_entities` already fetches, so this is a read of something
+        the traversal has usually pulled a moment earlier — and behind
+        `CachingLineageSource` it is free after the first hit.
+
+        Without this the SDK path resolved no `column_features` at all, so a
+        dropped column implicated every feature its table's descendants fed
+        while the MCP path narrowed to the ones it actually reached. Same
+        catalog, same fine-grained lineage sitting in it, different answer
+        depending on which client you happened to run — the README promises
+        table-level attribution when *DataHub* lacks column lineage, not when
+        the client does.
+        """
+        node = self.get_entity(urn)
+        if node is None:
+            return []
+        return [
+            LineageEdge(source_urn=urn, target_urn=upstream, relationship="DownstreamOf")
+            for upstream in fine_grained_upstreams(node.aspects, column)
+        ]
 
     def get_lineage(
         self, urn: str, direction: str = "UPSTREAM", hops: int = 1

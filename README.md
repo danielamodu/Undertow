@@ -137,7 +137,7 @@ Six decoupled layers. The LLM sits off to the side of the decision, never in it.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- **Resolver** — traverses the graph via DataHub's MCP server (or SDK fallback) into `DependencyFootprint` snapshots. Where the server can answer column-level lineage, findings are attributed per column rather than per table, so a dropped column implicates only the features it actually reaches; where it can't, attribution falls back to table-level rather than going silent.
+- **Resolver** — traverses the graph via DataHub's MCP server (or SDK fallback) into `DependencyFootprint` snapshots. Where the catalog holds column-level lineage, findings are attributed per column rather than per table, so a dropped column implicates only the features it actually reaches — on both paths, from the same `fineGrainedLineages` aspect. Where it doesn't, attribution falls back to table-level rather than going silent.
 - **Differ** — set differences across schema, governance, and statistical profiles. Statistics are limited to what DataHub profiles by default (null-rate, cardinality, z-score mean shift, range, row count); a missing statistic is reported as "cannot assess," never "no drift."
 - **Attributor** — origin-to-leaf `AttributionPath` chains + technical owners.
 - **Policy engine** — deterministic rules against `undertow.yaml`.
