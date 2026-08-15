@@ -18,8 +18,15 @@ from unittest.mock import MagicMock
 import pytest
 from click.testing import CliRunner
 
-from undertow.cli import EXIT_ERROR, EXIT_OK, main
-from undertow.models import FindingKind
+from undertow.cli import (
+    EXIT_ERROR,
+    EXIT_OK,
+    _assert_not_truncated,
+    _ModelUnreadable,
+    main,
+)
+from undertow.models import DependencyFootprint, FindingKind, UndertowSnapshot
+from undertow.policy import Policy
 
 FRAUD_MODEL = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,fraud_detector_v3,PROD)"
 MISSING_MODEL = "urn:li:mlModel:(urn:li:dataPlatform:sagemaker,nonexistent_model_xyz,PROD)"
@@ -121,6 +128,56 @@ def test_allow_probable_block_is_called_out(runner: CliRunner, tmp_path: Path) -
     result = runner.invoke(main, ["policy", "validate", "--config", path])
     assert result.exit_code == EXIT_OK
     assert "allow_probable_block is ON" in output_of(result)
+
+
+# --------------------------------------------------------------------------
+# fail_on_truncation
+#
+# A walk stopped by the hop cap cannot have examined what lay beyond it, so its
+# CLEAR is a weaker claim than a complete walk's. The report always says so;
+# this option is for teams who want it to stop the pipeline instead.
+# --------------------------------------------------------------------------
+
+
+def _footprint(*, truncated: tuple[str, ...] = ()) -> DependencyFootprint:
+    return DependencyFootprint(
+        model_urn=FRAUD_MODEL,
+        snapshot=UndertowSnapshot(model_urn=FRAUD_MODEL),
+        max_hops=2,
+        truncated_urns=truncated,
+    )
+
+
+def test_fail_on_truncation_is_off_by_default() -> None:
+    """Default-on would turn every deep graph's green build into exit 2 on
+    upgrade, which is how a team learns to route around the gate."""
+    assert Policy.default().fail_on_truncation is False
+
+
+def test_fail_on_truncation_loads_from_yaml(tmp_path: Path) -> None:
+    path = write(tmp_path, "fail_on_truncation: true\n")
+    assert Policy.load(path).fail_on_truncation is True
+
+
+def test_a_truncated_footprint_errors_when_the_policy_opts_in() -> None:
+    with pytest.raises(SystemExit) as exc:
+        _assert_not_truncated(_footprint(truncated=("urn:li:dataset:(x,y,PROD)",)), FRAUD_MODEL)
+    assert exc.value.code == EXIT_ERROR
+
+
+def test_a_complete_footprint_passes_the_truncation_check() -> None:
+    _assert_not_truncated(_footprint(), FRAUD_MODEL)  # must not raise
+
+
+def test_truncation_is_not_fatal_to_a_sweep() -> None:
+    """`--all` must keep checking the remaining models, exactly as it does for
+    an unreachable one."""
+    with pytest.raises(_ModelUnreadable):
+        _assert_not_truncated(
+            _footprint(truncated=("urn:li:dataset:(x,y,PROD)",)),
+            FRAUD_MODEL,
+            fatal=False,
+        )
 
 
 # --------------------------------------------------------------------------

@@ -44,6 +44,7 @@ def render_console(
     console: Console | None = None,
     written_to_datahub: bool = False,
     coverage: ProfileCoverage | None = None,
+    truncation: str | None = None,
 ) -> None:
     """Render structured Rich output for a Verdict to the console.
 
@@ -52,6 +53,10 @@ def render_console(
     "no drift found" across assets that were never profiled is a much weaker
     claim than the same words across assets that were, and a report that renders
     them identically is quietly misleading.
+
+    `truncation` is the same idea one layer down: how much of the graph the
+    resolver reached at all. Passed as a formatted line rather than a footprint
+    so the reporter keeps knowing nothing about resolver types.
     """
     con = console or Console()
 
@@ -190,6 +195,12 @@ def render_console(
         style = "yellow" if coverage.is_blind else "dim"
         con.print(f"  statistics: {coverage.summary()}", style=style)
 
+    if truncation is not None:
+        # Never dim. Unlike coverage, which qualifies how thoroughly a reached
+        # asset was examined, this says part of the graph was not reached — so
+        # the finding that would have mattered may simply not be in the report.
+        con.print(f"  coverage: {truncation}", style="yellow")
+
     if written_to_datahub:
         con.print(f"✍ Written to DataHub → {model_name}")
 
@@ -199,11 +210,16 @@ def format_console(
     *,
     written_to_datahub: bool = False,
     coverage: ProfileCoverage | None = None,
+    truncation: str | None = None,
 ) -> str:
     """Format Verdict console Rich output as a string."""
     buf = io.StringIO()
     con = Console(file=buf, force_terminal=False, width=80)
     render_console(
-        verdict, console=con, written_to_datahub=written_to_datahub, coverage=coverage
+        verdict,
+        console=con,
+        written_to_datahub=written_to_datahub,
+        coverage=coverage,
+        truncation=truncation,
     )
     return buf.getvalue()

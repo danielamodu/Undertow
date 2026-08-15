@@ -5,7 +5,20 @@
 # reviewable decision rather than a tribal convention.
 
 # How deep to walk upstream from a feature's source dataset.
+#
+# This is a real bound, not a formality. An asset beyond it is never fetched, so
+# it cannot produce a finding, so its absence reads as CLEAR. Every report now
+# says when the walk stopped early and how much was left unwalked — raise this
+# if you see that line, rather than trusting the verdict under it.
 max_hops: 5
+
+# Treat a walk the hop cap cut short as an ERROR (exit 2) instead of a verdict.
+#
+# Off by default so a graph deeper than max_hops does not turn a passing gate
+# into a failing one the day you upgrade. Turn it on when you would rather the
+# pipeline stop than accept a CLEAR that could not see the whole footprint —
+# the same shape of decision as allow_probable_block, made explicitly.
+fail_on_truncation: false
 
 # The models this team gates. `undertow check --all` sweeps them; `--model`
 # still gates one, which is what a deploy pipeline uses when it already knows
