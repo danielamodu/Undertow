@@ -22,7 +22,7 @@ import pytest
 
 from undertow.models import UndertowSnapshot
 from undertow.resolver import RecordedLineageSource
-from undertow.resolver.base import LineageNode, fine_grained_upstreams
+from undertow.resolver.base import LineageNode, fine_grained_upstreams, split_schema_field
 from undertow.resolver.traversal import _extract_baseline_snapshot, _member
 
 RECORDING = (
@@ -264,6 +264,64 @@ def test_fine_grained_reader_ignores_non_schema_field_urns() -> None:
     }
 
     assert fine_grained_upstreams(aspects, "amount") == []
+
+
+def test_fine_grained_reader_returns_only_columns_never_tables() -> None:
+    """`FineGrainedLineage.upstreamType` is FIELD_SET, DATASET or NONE.
+
+    A DATASET entry legitimately carries whole-table upstreams. This function
+    promises columns, so emitting a table URN would leave every caller either
+    re-filtering or quietly producing a "column lineage" edge pointing at a
+    table.
+    """
+    aspects = {
+        "upstreamLineage": {
+            "fineGrainedLineages": [
+                {
+                    "downstreams": [_SF.format("amount")],
+                    "upstreamType": "DATASET",
+                    "upstreams": [RAW, _SF.format("amount_usd")],
+                }
+            ]
+        }
+    }
+
+    assert fine_grained_upstreams(aspects, "amount") == [_SF.format("amount_usd")]
+
+
+def test_member_on_an_object_never_returns_a_method() -> None:
+    """Mirrors `traversal._member`. Two helpers sharing a name in one package
+    must not differ, or the guarantee silently stops holding."""
+
+    class HasMethod:
+        def upstreamLineage(self) -> str:  # noqa: N802 — DataHub's spelling
+            return "not a value"
+
+    assert fine_grained_upstreams(HasMethod(), "amount") == []
+
+
+@pytest.mark.parametrize(
+    "urn",
+    [
+        "urn:li:schemaField:(urn:li:dataset:(a,b,PROD),amount",  # no closing paren
+        "urn:li:schemaField:()",
+        "urn:li:schemaField:(no_comma_here)",
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,a.b,PROD)",
+        "",
+        None,
+    ],
+)
+def test_malformed_urns_are_not_parsed_as_columns(urn: object) -> None:
+    """Strict about the closing parenthesis: a truncated URN that merely starts
+    with the right prefix is not one, and treating it as one turns malformed
+    input into a confidently wrong column name."""
+    assert split_schema_field(urn) is None
+
+
+def test_a_well_formed_schema_field_urn_splits_into_dataset_and_column() -> None:
+    dataset = "urn:li:dataset:(urn:li:dataPlatform:snowflake,a.b,PROD)"
+
+    assert split_schema_field(f"urn:li:schemaField:({dataset},amount)") == (dataset, "amount")
 
 
 # --------------------------------------------------------------------------

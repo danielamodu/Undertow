@@ -22,7 +22,12 @@ from undertow.models import (
     ProfileSnapshot,
     UndertowSnapshot,
 )
-from undertow.resolver.base import LineageNode, LineageSource, parse_entity_type
+from undertow.resolver.base import (
+    LineageNode,
+    LineageSource,
+    parse_entity_type,
+    split_schema_field,
+)
 
 
 def resolve_footprint(
@@ -138,25 +143,6 @@ def resolve_footprint(
     )
 
 
-def _split_schema_field(urn: str) -> tuple[str, str] | None:
-    """`urn:li:schemaField:(<dataset urn>,amount)` -> `(<dataset urn>, "amount")`.
-
-    Returns None for anything that is not a schemaField URN, which is the
-    common case: a column-lineage query can legitimately come back pointing at
-    whole datasets when the platform never emitted fine-grained lineage.
-    """
-    if not urn.startswith("urn:li:schemaField:("):
-        return None
-    inner = urn[urn.index("(") + 1 : urn.rindex(")")] if urn.endswith(")") else None
-    if inner is None:
-        return None
-    # The dataset URN contains its own commas, so split on the last one.
-    parent, _, column = inner.rpartition(",")
-    if not parent or not column:
-        return None
-    return parent, column
-
-
 def _apply_column_features(
     assets: dict[str, AssetSnapshot],
     dataset_features: dict[str, set[str]],
@@ -225,7 +211,10 @@ def _apply_column_features(
 
         for edge in edges or []:
             target = edge.target_urn if edge.source_urn == ds_urn else edge.source_urn
-            parsed = _split_schema_field(target)
+            # A source can legitimately answer with a whole-dataset URN when the
+            # platform emitted no fine-grained lineage; that carries no
+            # column-level information, so it is not ours to attribute.
+            parsed = split_schema_field(target)
             if parsed is None:
                 continue
             up_urn, up_column = parsed
