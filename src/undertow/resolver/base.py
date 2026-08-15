@@ -31,6 +31,58 @@ def parse_entity_type(urn: str) -> str:
     return "unknown"
 
 
+def _member(obj: Any, key: str) -> Any:
+    """Read `key` off a mapping or an object.
+
+    Aspects arrive as plain dicts from a recording and as semityped schema
+    classes from the SDK, and this has to read both. Deliberately local rather
+    than imported from `traversal`, which imports this module.
+    """
+    if isinstance(obj, dict):
+        return obj.get(key)
+    return getattr(obj, key, None)
+
+
+def fine_grained_upstreams(aspects: Any, column: str) -> list[str]:
+    """Upstream `schemaField` URNs feeding `column`, read off `upstreamLineage`.
+
+    `fineGrainedLineages` is where DataHub actually stores column-level lineage:
+    each entry names one or more downstream fields and the upstream fields they
+    are derived from. It rides on the *downstream* dataset's `upstreamLineage`
+    aspect, so this is called with the aspects of the table being read from and
+    returns the columns that produce the one asked about.
+
+    Returning `[]` covers three different situations that a caller cannot and
+    should not tell apart: the aspect is absent, the platform emitted no
+    fine-grained lineage, or this particular column genuinely has no upstream.
+    All three mean the same thing to the resolver — no column-level answer is
+    available — and it falls back to asset-level attribution for each.
+    """
+    lineage = _member(aspects, "upstreamLineage")
+    if lineage is None:
+        return []
+
+    upstreams: list[str] = []
+    for entry in _member(lineage, "fineGrainedLineages") or []:
+        downstreams = _member(entry, "downstreams") or []
+        if not any(_schema_field_column(d) == column for d in downstreams):
+            continue
+        for up in _member(entry, "upstreams") or []:
+            if isinstance(up, str) and up not in upstreams:
+                upstreams.append(up)
+    return upstreams
+
+
+def _schema_field_column(urn: Any) -> str | None:
+    """The column name inside a `schemaField` URN, or None if it is not one."""
+    if not isinstance(urn, str) or not urn.startswith("urn:li:schemaField:("):
+        return None
+    inner = urn[urn.index("(") + 1 : urn.rindex(")")] if urn.endswith(")") else urn
+    # The dataset URN carries its own commas; the column is after the last one.
+    _, _, column = inner.rpartition(",")
+    return column or None
+
+
 class LineageNode(BaseModel):
     """An entity fetched from DataHub with raw or parsed aspect metadata."""
 
@@ -92,5 +144,6 @@ __all__ = [
     "LineageEdge",
     "SchemaFieldInfo",
     "LineageSource",
+    "fine_grained_upstreams",
     "parse_entity_type",
 ]

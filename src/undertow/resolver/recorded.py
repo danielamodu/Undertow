@@ -30,6 +30,7 @@ from undertow.resolver.base import (
     LineageNode,
     LineageSource,
     SchemaFieldInfo,
+    fine_grained_upstreams,
     parse_entity_type,
 )
 
@@ -90,6 +91,22 @@ class RecordedLineageSource(LineageSource):
                 via=e.get("via"),
             )
             for e in edges
+        ]
+
+    def get_column_lineage(self, urn: str, column: str, hops: int = 1) -> list[LineageEdge]:
+        """Column-level upstreams, read from the recorded `upstreamLineage` aspect.
+
+        No new capture was needed for this. `fineGrainedLineages` was already in
+        the recording — `scripts/seed_datahub.py` derives it by running
+        DataHub's own SQL parser over `scripts/sql/`, and the recorder captures
+        the whole aspect — it just had nothing reading it. The MCP server
+        answers its column-lineage tool from the same aspect, so replaying it
+        here is the same data by a shorter route, not an approximation of it.
+        """
+        entry = self._state["entities"].get(urn) or {}
+        return [
+            LineageEdge(source_urn=urn, target_urn=upstream, relationship="DownstreamOf")
+            for upstream in fine_grained_upstreams(entry.get("aspects") or {}, column)
         ]
 
     def list_schema_fields(self, urn: str) -> list[SchemaFieldInfo]:

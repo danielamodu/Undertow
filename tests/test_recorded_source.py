@@ -22,7 +22,7 @@ import pytest
 
 from undertow.models import UndertowSnapshot
 from undertow.resolver import RecordedLineageSource
-from undertow.resolver.base import LineageNode
+from undertow.resolver.base import LineageNode, fine_grained_upstreams
 from undertow.resolver.traversal import _extract_baseline_snapshot, _member
 
 RECORDING = (
@@ -194,6 +194,166 @@ def test_profiles_replay(recording: dict) -> None:
 def test_an_unknown_state_is_rejected_loudly(recording: dict) -> None:
     with pytest.raises(ValueError, match="no 'sideways' state"):
         RecordedLineageSource(recording, "sideways")
+
+
+# --------------------------------------------------------------------------
+# The fineGrainedLineages reader
+#
+# Has to read plain dicts (recordings, MCP) and semityped classes (SDK) alike,
+# because it is the one parser both shapes have to go through.
+# --------------------------------------------------------------------------
+
+_SF = "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:snowflake,a.b,PROD),{})"
+
+
+def _lineage_aspect(downstream: str, upstream: str) -> dict:
+    return {
+        "upstreamLineage": {
+            "fineGrainedLineages": [
+                {
+                    "downstreams": [_SF.format(downstream)],
+                    "upstreams": [_SF.format(upstream)],
+                }
+            ]
+        }
+    }
+
+
+def test_fine_grained_reader_matches_the_requested_column() -> None:
+    aspects = _lineage_aspect("amount", "amount_usd")
+
+    assert fine_grained_upstreams(aspects, "amount") == [_SF.format("amount_usd")]
+    assert fine_grained_upstreams(aspects, "customer_id") == []
+
+
+def test_fine_grained_reader_handles_a_missing_aspect() -> None:
+    """Absent aspect, no fine-grained lineage, and no upstream for this column
+    are three different situations that mean the same thing to a caller."""
+    assert fine_grained_upstreams({}, "amount") == []
+    assert fine_grained_upstreams({"upstreamLineage": {}}, "amount") == []
+    assert fine_grained_upstreams({"upstreamLineage": {"upstreams": []}}, "amount") == []
+
+
+def test_fine_grained_reader_reads_objects_as_well_as_dicts() -> None:
+    """The SDK hands back semityped classes, not dicts."""
+
+    class Obj:
+        def __init__(self, **kw):
+            for k, v in kw.items():
+                setattr(self, k, v)
+
+    aspects = Obj(
+        upstreamLineage=Obj(
+            fineGrainedLineages=[
+                Obj(downstreams=[_SF.format("amount")], upstreams=[_SF.format("amount_usd")])
+            ]
+        )
+    )
+
+    assert fine_grained_upstreams(aspects, "amount") == [_SF.format("amount_usd")]
+
+
+def test_fine_grained_reader_ignores_non_schema_field_urns() -> None:
+    """`downstreams` can name a whole dataset when lineage is table-level."""
+    aspects = {
+        "upstreamLineage": {
+            "fineGrainedLineages": [
+                {"downstreams": [RAW], "upstreams": [_SF.format("amount_usd")]}
+            ]
+        }
+    }
+
+    assert fine_grained_upstreams(aspects, "amount") == []
+
+
+# --------------------------------------------------------------------------
+# Column-level attribution, against the real recording
+#
+# `fineGrainedLineages` was captured from the live instance all along — the
+# seed derives it by running DataHub's own SQL parser over scripts/sql/ — and
+# nothing read it. These assert against that captured data rather than a mock,
+# which is what makes them evidence that column-level attribution works on a
+# real catalog and not just on a fixture shaped to agree with it.
+# --------------------------------------------------------------------------
+
+STAGING = "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.transactions_clean,PROD)"
+VELOCITY = "urn:li:mlFeature:(fraud_detection,transaction_velocity_7d)"
+
+
+def test_the_recording_carries_column_level_lineage(recording: dict) -> None:
+    source = RecordedLineageSource(recording, "before")
+
+    edges = source.get_column_lineage(STAGING, "amount")
+
+    assert [e.target_urn for e in edges] == [
+        f"urn:li:schemaField:({RAW},transaction_amount)"
+    ]
+
+
+def test_a_column_with_no_fine_grained_entry_replays_as_empty(recording: dict) -> None:
+    source = RecordedLineageSource(recording, "before")
+
+    assert source.get_column_lineage(STAGING, "no_such_column") == []
+
+
+def test_column_features_resolve_from_the_real_recording(recording: dict) -> None:
+    """The end-to-end claim: a real graph, walked, attributed per column."""
+    from undertow.resolver.traversal import resolve_footprint
+
+    footprint = resolve_footprint(
+        recording["models"]["fraud"], RecordedLineageSource(recording, "before"), max_hops=5
+    )
+    raw = footprint.snapshot.asset(RAW)
+
+    assert raw is not None
+    assert raw.column_features, "column-level lineage resolved nothing"
+    assert raw.features_for("transaction_amount") == (VELOCITY,)
+
+
+def test_a_column_nothing_reads_is_not_tarred_with_the_feature(recording: dict) -> None:
+    """`merchant_id` exists on transactions.raw and feeds no downstream column.
+
+    This is the whole point of the refinement. Asset-level attribution cannot
+    tell it apart from `transaction_amount`, which reaches a live feature three
+    hops away.
+    """
+    from undertow.resolver.traversal import resolve_footprint
+
+    footprint = resolve_footprint(
+        recording["models"]["fraud"], RecordedLineageSource(recording, "before"), max_hops=5
+    )
+    raw = footprint.snapshot.asset(RAW)
+
+    assert raw is not None
+    assert "merchant_id" in {c.path for c in raw.columns}
+    assert raw.features_for("merchant_id") == ()
+
+
+def test_the_dropped_column_finding_reports_column_level_lineage(recording: dict) -> None:
+    """`evidence["column_level_lineage"]` was False on every run until now."""
+    from undertow.differ import diff_snapshots
+    from undertow.models import FindingKind
+    from undertow.policy import Policy
+    from undertow.resolver.traversal import resolve_footprint
+
+    model = recording["models"]["fraud"]
+    before = resolve_footprint(
+        model, RecordedLineageSource(recording, "before"), max_hops=5
+    ).snapshot
+    after = resolve_footprint(
+        model, RecordedLineageSource(recording, "after"), max_hops=5
+    ).snapshot
+
+    dropped = [
+        f
+        for f in diff_snapshots(before, after, Policy.default())
+        if f.kind is FindingKind.COLUMN_DROPPED and f.subject_column == "transaction_amount"
+    ]
+
+    assert len(dropped) == 1
+    assert dropped[0].evidence["column_level_lineage"] is True
+    assert dropped[0].affected_feature_urn == VELOCITY
+    assert "which feeds transaction_velocity_7d" in dropped[0].summary
 
 
 def test_the_recorded_source_reports_no_connection_error(recording: dict) -> None:

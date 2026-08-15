@@ -20,14 +20,19 @@ import inspect
 import pytest
 
 from undertow.resolver import McpLineageSource, SdkLineageSource
-from undertow.resolver.base import LineageSource
+from undertow.resolver.base import LineageNode, LineageSource
 
 SOURCES = [SdkLineageSource, McpLineageSource]
 
 # Reached through `getattr` rather than the Protocol, so a missing one degrades
 # silently instead of raising. Each entry is a capability the traversal will use
 # if present — which is exactly why every source has to be explicit about it.
-DUCK_TYPED_CAPABILITIES = ["get_latest_profile"]
+#
+# `get_column_lineage` repeated the `get_latest_profile` story exactly: present
+# on the MCP source only, so the SDK path resolved no `column_features` and
+# attributed every finding at table level against a catalog that held perfectly
+# good fine-grained lineage. Same graph, different answer per client.
+DUCK_TYPED_CAPABILITIES = ["get_latest_profile", "get_column_lineage"]
 
 
 def protocol_methods() -> list[str]:
@@ -86,6 +91,42 @@ def test_a_source_without_statistics_reports_none_rather_than_empty() -> None:
     source = McpLineageSource(lambda name, args: None, profile_reader=None)
 
     assert source.get_latest_profile("urn:li:dataset:(urn:li:dataPlatform:x,y,PROD)") is None
+
+
+def test_the_sdk_source_reads_column_lineage_off_the_aspect_it_already_has() -> None:
+    """No new endpoint: `fineGrainedLineages` rides on `upstreamLineage`, which
+    `get_entities` fetches anyway."""
+    dataset = "urn:li:dataset:(urn:li:dataPlatform:snowflake,staging.core,PROD)"
+    upstream = (
+        "urn:li:schemaField:(urn:li:dataset:"
+        "(urn:li:dataPlatform:snowflake,raw.txns,PROD),amount_usd)"
+    )
+
+    class Stubbed(SdkLineageSource):
+        def __init__(self) -> None:  # no connection attempt
+            self.graph = None
+            self.connection_error = None
+
+        def get_entity(self, urn: str) -> LineageNode:
+            return LineageNode(
+                urn=urn,
+                entity_type="dataset",
+                aspects={
+                    "upstreamLineage": {
+                        "fineGrainedLineages": [
+                            {
+                                "downstreams": [f"urn:li:schemaField:({dataset},amount)"],
+                                "upstreams": [upstream],
+                            }
+                        ]
+                    }
+                },
+            )
+
+    edges = Stubbed().get_column_lineage(dataset, "amount")
+
+    assert [e.target_urn for e in edges] == [upstream]
+    assert Stubbed().get_column_lineage(dataset, "untouched_column") == []
 
 
 def test_the_mcp_source_uses_a_reader_when_given_one() -> None:
