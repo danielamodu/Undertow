@@ -147,6 +147,18 @@ class Policy(BaseModel):
     # How deep to walk upstream from a feature's source dataset.
     max_hops: int = 5
 
+    # Treat a footprint the hop cap cut short as an ERROR (exit 2) rather than a
+    # verdict. Off by default, and the default is the uncomfortable choice:
+    # a truncated walk cannot have examined what lay beyond it, so a CLEAR from
+    # one is not the same claim as a CLEAR from a complete walk.
+    #
+    # It stays off because turning it on by default would convert every deep
+    # graph from a passing gate into a failing one on upgrade, which is how a
+    # team learns to pass `--no-verify` to everything. The report now says
+    # loudly when it happened; teams who want that to stop the pipeline opt in,
+    # the same way `allow_probable_block` works.
+    fail_on_truncation: bool = False
+
     # The models this team gates, so `undertow check --all` has an inventory to
     # work from. Without it, adopting Undertow means remembering a set of
     # 70-character URNs and keeping them in step with a CI script by hand —

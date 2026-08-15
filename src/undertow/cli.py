@@ -30,7 +30,13 @@ from undertow.attributor import attribute_findings
 from undertow.differ import diff_snapshots, profile_coverage
 from undertow.engine import PolicyViolation, evaluate, validate_policy
 from undertow.investigator import investigate_findings, investigation_unavailable_reason
-from undertow.models import FindingKind, UndertowSnapshot, Verdict, short_urn
+from undertow.models import (
+    DependencyFootprint,
+    FindingKind,
+    UndertowSnapshot,
+    Verdict,
+    short_urn,
+)
 from undertow.narrator import generate_narrative_detailed
 from undertow.policy import Policy
 from undertow.reporter import (
@@ -40,6 +46,7 @@ from undertow.reporter import (
     write_verdict_to_datahub,
 )
 from undertow.resolver import (
+    CachingLineageSource,
     McpError,
     McpLineageSource,
     McpToolExecutor,
@@ -87,12 +94,18 @@ def _lineage_source(use_mcp: bool) -> Iterator[LineageSource]:
     The MCP path owns a child process and an initialised session, so it has a
     lifetime the SDK path does not. Both are handed out through one context
     manager rather than making every command remember the difference.
+
+    Both are wrapped in `CachingLineageSource`, whose lifetime is deliberately
+    this context manager and nothing longer. `check --all` resolves every model
+    in the inventory against the source yielded here, and models on one team's
+    inventory overwhelmingly share upstream layers — without the cache each one
+    re-fetches those from scratch.
     """
     gms_url = os.environ.get("DATAHUB_GMS_URL", "http://localhost:8080")
     token = os.environ.get("DATAHUB_GMS_TOKEN")
 
     if not use_mcp:
-        yield SdkLineageSource(gms_url=gms_url, token=token)
+        yield CachingLineageSource(SdkLineageSource(gms_url=gms_url, token=token))
         return
 
     # The server resolves its own connection through `DataHubClient.from_env()`,
@@ -119,9 +132,11 @@ def _lineage_source(use_mcp: bool) -> Iterator[LineageSource]:
         # Statistics are not on the MCP tool surface, so they come from the
         # timeseries API. Without this the MCP path resolves every asset
         # unprofiled and disagrees with the SDK path on the same graph.
-        yield McpLineageSource(
-            executor,
-            profile_reader=TimeseriesProfileReader(gms_url=gms_url, token=token),
+        yield CachingLineageSource(
+            McpLineageSource(
+                executor,
+                profile_reader=TimeseriesProfileReader(gms_url=gms_url, token=token),
+            )
         )
     finally:
         executor.close()
@@ -224,6 +239,33 @@ def _assert_not_blind(
             "empty footprint and a clean footprint are indistinguishable, and only "
             "one of them is safe to ship."
         )
+
+
+def _assert_not_truncated(
+    footprint: DependencyFootprint, model_urn: str, *, fatal: bool = True
+) -> None:
+    """Refuse a verdict from a walk the hop cap cut short, when policy says so.
+
+    Opt-in via `fail_on_truncation`. The argument for it is the same one
+    `_assert_not_blind` makes: assets beyond the cap were never fetched, so they
+    cannot have produced a finding, so their absence reads as CLEAR. The
+    argument against making it the default is that a graph deeper than
+    `max_hops` is a configuration problem, not an outage, and converting every
+    such team's green build into exit 2 on upgrade teaches them to route around
+    the gate. So the report always says it; only policy makes it fatal.
+    """
+    if not footprint.truncated:
+        return
+    message = (
+        f"[red]Incomplete footprint for[/red] {model_urn}\n"
+        f"{footprint.truncation_summary()}\n"
+        "Reported as an error because `fail_on_truncation` is set: a walk that "
+        "stopped early cannot distinguish 'nothing changed' from 'we never looked'."
+    )
+    err_console.print(message)
+    if fatal:
+        raise SystemExit(EXIT_ERROR)
+    raise _ModelUnreadable(model_urn)
 
 
 def _load_policy(path: str | None) -> Policy:
@@ -473,12 +515,22 @@ def demo(recording: str | None, config_path: str) -> None:
     )
     console.print()
 
-    def verdict_for(model_urn: str, state: str) -> tuple[Any, Any]:
+    # One source per recorded state, shared across both models — the same
+    # sharing `check --all` gets against a live catalog, since the two models
+    # here overlap on the staging layer exactly as a real inventory would.
+    sources: dict[str, CachingLineageSource] = {}
+
+    def source_for(state: str) -> CachingLineageSource:
+        if state not in sources:
+            sources[state] = CachingLineageSource(RecordedLineageSource(data, state))
+        return sources[state]
+
+    def verdict_for(model_urn: str, state: str) -> tuple[Any, Any, str | None]:
         """Diff `state` against the recorded pre-change graph."""
         baseline = resolve_footprint(
-            model_urn, RecordedLineageSource(data, "before"), max_hops=pol.max_hops
+            model_urn, source_for("before"), max_hops=pol.max_hops
         ).snapshot
-        current_source = RecordedLineageSource(data, state)
+        current_source = source_for(state)
         footprint = resolve_footprint(model_urn, current_source, max_hops=pol.max_hops)
         findings = attribute_findings(
             diff_snapshots(baseline, footprint.snapshot, pol), footprint
@@ -492,12 +544,13 @@ def demo(recording: str | None, config_path: str) -> None:
                 baseline_ref="recorded:before",
             ),
             profile_coverage(baseline, footprint.snapshot),
+            footprint.truncation_summary(),
         )
 
     console.print("[bold]1. Before the change[/bold] — the graph as approved")
     console.print()
-    clear_verdict, coverage = verdict_for(fraud, "before")
-    render_console(clear_verdict, coverage=coverage)
+    clear_verdict, coverage, truncation = verdict_for(fraud, "before")
+    render_console(clear_verdict, coverage=coverage, truncation=truncation)
     console.print(f"  exit code {clear_verdict.exit_code()}", style="dim")
     console.print()
 
@@ -512,10 +565,10 @@ def demo(recording: str | None, config_path: str) -> None:
 
     exit_codes = []
     for step, (label, model_urn) in enumerate((("fraud team", fraud), ("churn team", churn)), 3):
-        verdict, coverage = verdict_for(model_urn, "after")
+        verdict, coverage, truncation = verdict_for(model_urn, "after")
         console.print(f"[bold]{step}. Gating {short_urn(model_urn)}[/bold]  ({label})")
         console.print()
-        render_console(verdict, coverage=coverage)
+        render_console(verdict, coverage=coverage, truncation=truncation)
         console.print(f"  exit code {verdict.exit_code()}", style="dim")
         console.print()
         exit_codes.append(verdict.exit_code())
@@ -962,6 +1015,8 @@ def _gate_one(
             # 1. Resolve
             footprint = resolve_footprint(model_urn, source, max_hops=pol.max_hops)
             _assert_not_blind(source, footprint, model_urn, fatal=fatal)
+            if pol.fail_on_truncation:
+                _assert_not_truncated(footprint, model_urn, fatal=fatal)
             current_snapshot = footprint.snapshot
 
             # 2. Baseline
@@ -1043,11 +1098,17 @@ def _gate_one(
 
     # 8. Reporter. Coverage rides along so the report can qualify a quiet
     #    verdict: silence from the statistical differ means "nothing found"
-    #    only where there was something to look at.
+    #    only where there was something to look at. Truncation is the same
+    #    qualifier one layer lower — whether the walk reached the whole graph.
     coverage = (
         profile_coverage(baseline_snapshot, current_snapshot) if baseline_snapshot else None
     )
-    render_console(verdict, written_to_datahub=wrote_to_datahub, coverage=coverage)
+    render_console(
+        verdict,
+        written_to_datahub=wrote_to_datahub,
+        coverage=coverage,
+        truncation=footprint.truncation_summary(),
+    )
 
     # GitHub PR summary if in GitHub Actions
     if os.environ.get("GITHUB_ACTIONS") or os.environ.get("GITHUB_STEP_SUMMARY"):

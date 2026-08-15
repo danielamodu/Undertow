@@ -151,6 +151,61 @@ def test_the_skill_does_not_run_the_filter_field_that_looks_right_but_is_not(
     assert "-f entity=" not in commands, "`entity` is rejected; the field is `entity_type`"
 
 
+# --------------------------------------------------------------------------
+# The skill's central promise: it explains verdicts, it does not clear them
+# --------------------------------------------------------------------------
+
+# Every policy knob that can make an existing finding stop appearing. The skill
+# has to name each one, because the whole guarantee it sells is that an agent
+# reaching for "the flag that makes the red box go away" is told no — and a
+# lever nobody wrote down is not forbidden by a rule about the other levers.
+#
+# `max_hops` is the one that took longest to notice: it touches no severity at
+# all, so it does not look like tampering. It bounds how far upstream the walk
+# reaches, and an asset never fetched cannot produce a finding, so lowering it
+# turns a genuine BLOCK into a green CLEAR with exit 0.
+SUPPRESSING_POLICY_KNOBS = frozenset(
+    {"rules", "exemptions", "thresholds", "max_hops", "fail_on_truncation"}
+)
+
+
+def test_every_finding_suppressing_knob_is_forbidden_by_the_skill(skill) -> None:
+    _, body = skill
+
+    missing = [knob for knob in sorted(SUPPRESSING_POLICY_KNOBS) if knob not in body]
+
+    assert not missing, (
+        f"SKILL.md never mentions {missing}, each of which can make a finding "
+        "disappear. An agent told not to edit severities will happily reach for "
+        "a knob the skill forgot to name."
+    )
+
+
+def test_the_suppressing_knobs_are_still_the_ones_policy_actually_has(skill) -> None:
+    """Pins the list above to `Policy` itself, so a new knob fails here rather
+    than silently becoming an unforbidden way to clear a BLOCK."""
+    from undertow.policy import Policy
+
+    fields = set(Policy.model_fields)
+    unknown = SUPPRESSING_POLICY_KNOBS - fields
+
+    assert not unknown, (
+        f"{sorted(unknown)} are no longer Policy fields; update the skill and this list"
+    )
+
+
+def test_the_skill_says_to_raise_max_hops_not_lower_it(skill) -> None:
+    """The direction is the whole point. `max_hops` is the only policy value
+    where the safe move and the dangerous move are the same edit with opposite
+    signs, so 'be careful with max_hops' is not enough guidance to act on."""
+    _, body = skill
+
+    assert "never lower" in body.lower()
+    assert re.search(r"[Rr]aise .{0,20}`?max_hops`?", body), (
+        "the skill must say which direction is the safe one"
+    )
+
+
 def test_policy_subcommands_named_by_the_skill_exist() -> None:
     result = CliRunner().invoke(main, ["policy", "--help"])
 

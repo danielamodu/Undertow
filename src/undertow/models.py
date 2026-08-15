@@ -443,7 +443,36 @@ class DependencyFootprint(BaseModel):
     visited_urns: tuple[str, ...] = ()
     max_hops: int = 5
 
+    # Assets that sat on the hop cap with upstreams we never walked. Empty means
+    # the footprint is complete; non-empty means part of the graph was not
+    # looked at, and therefore could not have produced a finding.
+    #
+    # This exists for the same reason `ProfileCoverage` does. An asset beyond
+    # the cap is absent from `snapshot.assets`, so it drops out of
+    # `shared_urns()`, so it yields no findings, so it contributes CLEAR — a
+    # verdict indistinguishable from "we looked and nothing had changed". The
+    # cap is a legitimate bound on traversal cost; being quiet about hitting it
+    # is what turns it into a false negative.
+    truncated_urns: tuple[str, ...] = ()
+
     @property
     def assets_checked(self) -> int:
         return len(self.snapshot.assets)
+
+    @property
+    def truncated(self) -> bool:
+        """Did the hop cap stop the walk somewhere with more graph behind it?"""
+        return bool(self.truncated_urns)
+
+    def truncation_summary(self) -> str | None:
+        """One line for a report, or None when the footprint is complete."""
+        if not self.truncated_urns:
+            return None
+        n = len(self.truncated_urns)
+        return (
+            f"Traversal stopped at the {self.max_hops}-hop limit with "
+            f"{n} asset(s) still having unwalked upstreams. Anything beyond them "
+            f"was not examined and cannot appear as a finding — raise `max_hops` "
+            f"in undertow.yaml to widen the walk."
+        )
 

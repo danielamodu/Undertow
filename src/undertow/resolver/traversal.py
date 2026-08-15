@@ -57,6 +57,8 @@ def resolve_footprint(
 
     dataset_features: dict[str, set[str]] = {}
 
+    truncated: list[str] = []
+
     while queue:
         curr_urn, depth, chain = queue.popleft()
         node = _fetch_entity(curr_urn, source, memo)
@@ -68,10 +70,27 @@ def resolve_footprint(
         attribution_hops = _build_attribution_hops(chain)
         path_hops[curr_urn] = attribution_hops
 
-        if depth >= max_hops:
-            continue
-
+        # Asked before the depth check, not after. Knowing whether the cap cost
+        # us anything means asking what was behind it, which is one extra
+        # lineage query per node sitting on the boundary. That is the price of
+        # not reporting a truncated walk as a clean one, and it is the same
+        # trade `profile_coverage` makes: a gate is allowed to be bounded, it is
+        # not allowed to be quietly bounded.
         upstreams = _find_upstreams(node, curr_urn, entity_type, source)
+        unwalked = [
+            urn
+            for urn, _ in upstreams
+            if urn not in visited and parse_entity_type(urn) != "mlFeatureTable"
+        ]
+
+        if depth >= max_hops:
+            # Only when something was actually left behind. A genuine leaf at
+            # the cap lost nothing, and warning about it would make the message
+            # fire on healthy footprints until a team learned to ignore it —
+            # which is how a real signal gets trained out of existence.
+            if unwalked:
+                truncated.append(curr_urn)
+            continue
 
         for next_urn, relationship in upstreams:
             next_type = parse_entity_type(next_urn)
@@ -94,6 +113,8 @@ def resolve_footprint(
             )
             assets[ds_urn] = updated_snap
 
+    _apply_column_features(assets, dataset_features, source)
+
     final_paths: dict[str, AttributionPath] = {}
     for urn, hops_tuple in path_hops.items():
         owners = assets[urn].owners if urn in assets else ()
@@ -113,7 +134,112 @@ def resolve_footprint(
         paths=final_paths,
         visited_urns=tuple(sorted(visited)),
         max_hops=max_hops,
+        truncated_urns=tuple(sorted(truncated)),
     )
+
+
+def _split_schema_field(urn: str) -> tuple[str, str] | None:
+    """`urn:li:schemaField:(<dataset urn>,amount)` -> `(<dataset urn>, "amount")`.
+
+    Returns None for anything that is not a schemaField URN, which is the
+    common case: a column-lineage query can legitimately come back pointing at
+    whole datasets when the platform never emitted fine-grained lineage.
+    """
+    if not urn.startswith("urn:li:schemaField:("):
+        return None
+    inner = urn[urn.index("(") + 1 : urn.rindex(")")] if urn.endswith(")") else None
+    if inner is None:
+        return None
+    # The dataset URN contains its own commas, so split on the last one.
+    parent, _, column = inner.rpartition(",")
+    if not parent or not column:
+        return None
+    return parent, column
+
+
+def _apply_column_features(
+    assets: dict[str, AssetSnapshot],
+    dataset_features: dict[str, set[str]],
+    source: LineageSource,
+) -> None:
+    """Narrow "this asset feeds these features" down to "this *column* does".
+
+    `feeds_features` is asset-level because DataHub's `DerivedFrom` edge is:
+    `mlFeatureProperties.sources` holds dataset URNs, never columns. So without
+    this pass, dropping any column of a table that feeds a feature implicates
+    that feature — including columns nothing downstream ever reads.
+
+    The refinement has to come from the other end. Fine-grained lineage between
+    *datasets* is something DataHub models well, so for a dataset D that feeds
+    features, each of D's columns can be walked upstream to the columns that
+    produce it, and those columns inherit D's features. Propagation is
+    transitive: a raw table three hops up gets its features through whatever
+    chain of column lineage reaches it.
+
+    Mutates `assets` in place. Silent no-op when the source cannot answer
+    column-level questions — only the MCP source can today — and the empty
+    `column_features` that leaves behind is read as *unknown*, falling back to
+    the asset-level answer rather than to silence. That fallback is the reason
+    this can be added without changing any existing verdict.
+
+    Cost: one lineage query per column reached on the feature-feeding path.
+    Deliberately uncapped. A cap would silently stop resolving partway through
+    and leave findings attributed to the wrong features, which is the same
+    class of quiet blindness `truncated_urns` exists to prevent.
+    """
+    fetch = getattr(source, "get_column_lineage", None)
+    if not callable(fetch):
+        return
+
+    # (dataset_urn, column) -> features that column feeds.
+    resolved: dict[tuple[str, str], set[str]] = {}
+
+    # Seed from every dataset that directly feeds a feature. The seeding
+    # dataset's own columns are deliberately not recorded: we know the table
+    # feeds the feature but not which of its columns do, and inventing a
+    # column-level answer there would be worse than falling back.
+    frontier: list[tuple[str, str, frozenset[str]]] = []
+    for ds_urn, feat_set in dataset_features.items():
+        asset = assets.get(ds_urn)
+        if asset is None:
+            continue
+        features = frozenset(feat_set)
+        for col in asset.columns:
+            frontier.append((ds_urn, col.path, features))
+
+    seen: set[tuple[str, str, frozenset[str]]] = set()
+    while frontier:
+        ds_urn, column, features = frontier.pop()
+        key = (ds_urn, column, features)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        try:
+            edges = fetch(ds_urn, column)
+        except Exception:
+            # Fine-grained lineage is an enrichment. A backend that errors on
+            # one column must not take down a resolution that is otherwise
+            # complete — the asset-level answer is still correct, just broader.
+            continue
+
+        for edge in edges or []:
+            target = edge.target_urn if edge.source_urn == ds_urn else edge.source_urn
+            parsed = _split_schema_field(target)
+            if parsed is None:
+                continue
+            up_urn, up_column = parsed
+            if up_urn not in assets:
+                continue  # outside the footprint; not ours to attribute
+            resolved.setdefault((up_urn, up_column), set()).update(features)
+            frontier.append((up_urn, up_column, features))
+
+    by_asset: dict[str, dict[str, tuple[str, ...]]] = {}
+    for (urn, column), reached in resolved.items():
+        by_asset.setdefault(urn, {})[column] = tuple(sorted(reached))
+
+    for urn, mapping in by_asset.items():
+        assets[urn] = assets[urn].model_copy(update={"column_features": mapping})
 
 
 def _member(obj: Any, name: str) -> Any:

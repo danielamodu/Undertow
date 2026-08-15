@@ -255,6 +255,181 @@ def test_dataset_feeds_features_is_populated() -> None:
     assert FEATURE_2 in staging_snap.feeds_features
 
 
+# --------------------------------------------------------------------------
+# Hop-cap truncation
+#
+# The cap is a legitimate bound on traversal cost. Being quiet about hitting it
+# is not: an asset beyond the cap is never fetched, so it is absent from
+# `snapshot.assets`, so it drops out of `shared_urns()`, so it produces no
+# finding — and a footprint that stopped early renders identically to one that
+# walked the whole graph and found nothing.
+# --------------------------------------------------------------------------
+
+
+def test_hop_cap_records_what_it_left_behind() -> None:
+    source = MockLineageSource()
+    footprint = resolve_footprint(MODEL_URN, source, max_hops=1)
+
+    # Both features sit on the cap with STAGING_PAYMENTS unwalked behind them.
+    assert footprint.truncated
+    assert set(footprint.truncated_urns) == {FEATURE_1, FEATURE_2}
+    assert STAGING_PAYMENTS not in footprint.snapshot.assets
+
+    summary = footprint.truncation_summary()
+    assert summary is not None
+    assert "1-hop limit" in summary
+
+
+def test_a_complete_walk_is_not_marked_truncated() -> None:
+    source = MockLineageSource()
+    footprint = resolve_footprint(MODEL_URN, source, max_hops=5)
+
+    assert not footprint.truncated
+    assert footprint.truncated_urns == ()
+    assert footprint.truncation_summary() is None
+
+
+def test_a_leaf_sitting_exactly_on_the_cap_is_not_truncation() -> None:
+    """Reaching the cap is only a problem if something was behind it.
+
+    RAW_PAYMENTS and RAW_TXNS are at depth 3 with no upstreams of their own, so
+    `max_hops=3` walks the entire graph and happens to stop at the boundary.
+    Reporting that would fire the warning on healthy footprints until a team
+    learned to ignore it, which is how a real signal gets trained out.
+    """
+    source = MockLineageSource()
+    footprint = resolve_footprint(MODEL_URN, source, max_hops=3)
+
+    assert RAW_PAYMENTS in footprint.snapshot.assets
+    assert RAW_TXNS in footprint.snapshot.assets
+    assert not footprint.truncated
+
+
+def test_truncation_is_recorded_at_the_node_that_actually_stopped() -> None:
+    """The report names the boundary, not everything on the path to it.
+
+    At `max_hops=2` the features are walked through cleanly and STAGING is the
+    node left holding unvisited upstreams. Marking its children too would make
+    the count meaningless as a measure of how much graph went unseen.
+    """
+    source = MockLineageSource()
+    footprint = resolve_footprint(MODEL_URN, source, max_hops=2)
+
+    assert STAGING_PAYMENTS in footprint.snapshot.assets
+    assert footprint.truncated_urns == (STAGING_PAYMENTS,)
+
+
+# --------------------------------------------------------------------------
+# Column-level feature attribution
+# --------------------------------------------------------------------------
+
+
+def _schema_field(dataset_urn: str, column: str) -> str:
+    return f"urn:li:schemaField:({dataset_urn},{column})"
+
+
+class ColumnLineageSource(MockLineageSource):
+    """A source that can answer column-level questions, as the MCP server can."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.column_calls: list[tuple[str, str]] = []
+        self.column_map: dict[tuple[str, str], list[str]] = {
+            # staging.amount is built from raw.payments.amount_usd...
+            (STAGING_PAYMENTS, "amount"): [_schema_field(RAW_PAYMENTS, "amount_usd")],
+            # ...which is itself built from raw.transactions.amount_raw.
+            (RAW_PAYMENTS, "amount_usd"): [_schema_field(RAW_TXNS, "amount_raw")],
+        }
+
+    def get_column_lineage(self, urn: str, column: str, hops: int = 1) -> list[LineageEdge]:
+        self.column_calls.append((urn, column))
+        return [
+            LineageEdge(source_urn=urn, target_urn=target, relationship="DownstreamOf")
+            for target in self.column_map.get((urn, column), [])
+        ]
+
+
+def test_column_features_narrow_asset_level_attribution() -> None:
+    """`feeds_features` is asset-level; this is what makes it per-column.
+
+    Without it, dropping *any* column of an upstream table implicates every
+    feature that table's descendants feed — including columns nothing
+    downstream reads.
+    """
+    footprint = resolve_footprint(MODEL_URN, ColumnLineageSource(), max_hops=5)
+
+    raw = footprint.snapshot.asset(RAW_PAYMENTS)
+    assert raw is not None
+    assert raw.column_features == {"amount_usd": (FEATURE_1, FEATURE_2)}
+
+    # The column that actually flows downstream names the features it reaches...
+    assert raw.features_for("amount_usd") == (FEATURE_1, FEATURE_2)
+    # ...and the one that does not is no longer tarred with them.
+    assert raw.features_for("user_id") == ()
+
+
+def test_column_features_propagate_transitively() -> None:
+    """Attribution has to survive intermediate layers, not just one hop."""
+    footprint = resolve_footprint(MODEL_URN, ColumnLineageSource(), max_hops=5)
+
+    txns = footprint.snapshot.asset(RAW_TXNS)
+    assert txns is not None
+    assert txns.column_features == {"amount_raw": (FEATURE_1, FEATURE_2)}
+
+
+def test_column_features_are_skipped_when_the_source_cannot_answer() -> None:
+    """Only the MCP source resolves column lineage today.
+
+    Everything else must degrade to the asset-level answer rather than to
+    silence — an empty `column_features` reads as *unknown*, and `features_for`
+    falls back. This is what lets the pass be added without moving any verdict.
+    """
+    source = MockLineageSource()
+    assert not hasattr(source, "get_column_lineage")
+
+    footprint = resolve_footprint(MODEL_URN, source, max_hops=5)
+
+    raw = footprint.snapshot.asset(RAW_PAYMENTS)
+    staging = footprint.snapshot.asset(STAGING_PAYMENTS)
+    assert raw is not None and staging is not None
+    assert raw.column_features == {}
+    # The asset-level answer is untouched and still resolves.
+    assert set(staging.feeds_features) == {FEATURE_1, FEATURE_2}
+
+
+def test_a_failing_column_query_does_not_lose_the_footprint() -> None:
+    """Fine-grained lineage is enrichment; it must never take down resolution."""
+
+    class BrokenColumnSource(MockLineageSource):
+        def get_column_lineage(
+            self, urn: str, column: str, hops: int = 1
+        ) -> list[LineageEdge]:
+            raise RuntimeError("fine-grained lineage unavailable")
+
+    footprint = resolve_footprint(MODEL_URN, BrokenColumnSource(), max_hops=5)
+
+    assert RAW_PAYMENTS in footprint.snapshot.assets
+    raw = footprint.snapshot.asset(RAW_PAYMENTS)
+    assert raw is not None
+    assert raw.column_features == {}
+
+
+def test_column_lineage_is_only_asked_about_feature_feeding_paths() -> None:
+    """The walk starts at datasets that feed features, not at every asset.
+
+    Each query is a round trip, and finding #3 in this repo is that nothing
+    caches them yet. Asking about columns that could not reach a feature would
+    be spending that cost for an answer nobody reads.
+    """
+    source = ColumnLineageSource()
+    resolve_footprint(MODEL_URN, source, max_hops=5)
+
+    asked = {urn for urn, _ in source.column_calls}
+    assert MODEL_URN not in asked
+    assert FEATURE_1 not in asked
+    assert STAGING_PAYMENTS in asked
+
+
 def test_urn_entity_type_parser() -> None:
     assert parse_entity_type(MODEL_URN) == "mlModel"
     assert parse_entity_type(FEATURE_1) == "mlFeature"

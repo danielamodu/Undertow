@@ -29,17 +29,41 @@ gate says BLOCK, your job is to explain *why* and *who* — never to argue the
 severity down, re-run with a laxer config hoping for a better answer, or suggest
 the user bypass the gate.
 
-Two things follow, and they are not optional:
+This is not optional, and it is broader than it first looks:
 
-- **Never edit `undertow.yaml` to turn a BLOCK into a WARN.** If a rule is
-  genuinely wrong for a team, that is a policy change they make deliberately,
-  reviewed, in their own time — not a thing you do to get a pipeline green.
+**Never edit `undertow.yaml` to make a finding go away.** Every one of the
+settings below can clear a red box without fixing anything, and some of them do
+not look like tampering at all. None of them are yours to change to get a
+pipeline green. If a value is genuinely wrong for a team, that is a policy
+change they make deliberately, reviewed, in their own time.
+
+| Setting | How it silences a finding |
+| --- | --- |
+| `rules` | Downgrades a kind's severity outright — BLOCK becomes WARN. |
+| `exemptions` | Downgrades a *matching* finding. Looks legitimate, because a reason and an expiry are required and you can supply both. Supplying them does not make it your call. |
+| `thresholds` | Raise one far enough and a statistical finding stops firing. |
+| `max_hops` | Bounds how far upstream the walk goes. An asset beyond it is never fetched, so it cannot produce a finding, so a BLOCK three hops up becomes a green CLEAR with exit `0`. **Lowering this does not resolve a finding — it stops the gate from being able to see it.** If a report says the traversal stopped early, that number needs raising, never lowering. |
+| `fail_on_truncation` | Setting it to `false` converts "the gate could not see the whole footprint" from an error back into a verdict. |
+
+One more, outside the config file:
+
 - **Never pass `--baseline` at a stale snapshot to make a diff disappear.**
   Re-baselining is how you accept a change, and it is an explicit act with an
   owner. See Step 6.
 
 If you find yourself looking for a flag that makes the red box go away, stop and
 tell the user what the finding actually is.
+
+## When the report says the walk stopped early
+
+A verdict from a truncated footprint is a weaker claim than a verdict from a
+complete one. When you see a `coverage:` line saying assets still had unwalked
+upstreams, say so when you report the result — a CLEAR underneath that line
+means "nothing changed in the part we reached," not "nothing changed."
+
+The fix is to raise `max_hops` in `undertow.yaml` and re-run. Teams who want a
+truncated walk to stop the pipeline outright set `fail_on_truncation: true`,
+which turns it into exit `2` — the gate could not see, which is never a pass.
 
 ## Not this skill
 
@@ -282,6 +306,9 @@ Expect `undertow_risk_verdict`, `undertow_last_checked`, and a
 7. **Passing an unquoted URN to the shell.** URNs contain parentheses and commas.
 8. **Using `--investigate` without `--mcp` or a key** and assuming it ran. It
    says so when it skips; read the message.
+9. **Reading a CLEAR from a truncated walk as a clean footprint.** If the report
+   says the traversal stopped at the hop limit, part of the graph was never
+   examined. Raise `max_hops`; do not lower it.
 
 ## Final reminders
 

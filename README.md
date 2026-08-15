@@ -137,7 +137,7 @@ Six decoupled layers. The LLM sits off to the side of the decision, never in it.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- **Resolver** — traverses the graph via DataHub's MCP server (or SDK fallback) into `DependencyFootprint` snapshots.
+- **Resolver** — traverses the graph via DataHub's MCP server (or SDK fallback) into `DependencyFootprint` snapshots. Where the server can answer column-level lineage, findings are attributed per column rather than per table, so a dropped column implicates only the features it actually reaches; where it can't, attribution falls back to table-level rather than going silent.
 - **Differ** — set differences across schema, governance, and statistical profiles. Statistics are limited to what DataHub profiles by default (null-rate, cardinality, z-score mean shift, range, row count); a missing statistic is reported as "cannot assess," never "no drift."
 - **Attributor** — origin-to-leaf `AttributionPath` chains + technical owners.
 - **Policy engine** — deterministic rules against `undertow.yaml`.
@@ -152,6 +152,7 @@ This is the part that matters for a production gate: **the agent cannot change t
 - This isn't a prompt instruction — it's structural. `Finding` has no severity field, so there's nothing for the agent to influence even if it tried.
 - `tests/test_investigator.py::test_investigation_cannot_change_the_verdict` asserts the verdict is byte-identical whether `--investigate` runs or not.
 - Fails closed: if the resolver can't reach DataHub, it returns exit code `2` (error), never a false `CLEAR`. An empty footprint diffs clean against any baseline, so a broken connection must never be allowed to look like a passing check.
+- Says what it didn't look at. A walk stopped by `max_hops` reports how many assets still had unwalked upstreams, because a truncated footprint and a clean one produce the same CLEAR otherwise. Set `fail_on_truncation: true` to make that exit `2` rather than a verdict.
 
 | Exit code | Meaning |
 |---|---|

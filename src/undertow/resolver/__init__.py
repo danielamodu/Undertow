@@ -7,6 +7,7 @@ from undertow.resolver.base import (
     SchemaFieldInfo,
     parse_entity_type,
 )
+from undertow.resolver.caching import CachingLineageSource
 from undertow.resolver.mcp_client import (
     DEFAULT_TIMEOUT_SEC,
     OSS_TOOLS,
@@ -22,6 +23,7 @@ from undertow.resolver.traversal import resolve_footprint
 __all__ = [
     "DEFAULT_TIMEOUT_SEC",
     "OSS_TOOLS",
+    "CachingLineageSource",
     "LineageEdge",
     "LineageNode",
     "LineageSource",
